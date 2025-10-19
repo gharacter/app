@@ -1,0 +1,3025 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動画生成AIプロンプトオーサリングツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+JP:wght@100..900&display=swap');
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; background-color: #1a1a1a; color: #f0f0f0; margin: 0; padding: 0; overflow: hidden; height: 100vh; }
+        
+        /* Box sizing to border-box */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        .header-bar { 
+            background-color: #212121; 
+            border-bottom: 1px solid #333; 
+            flex-shrink: 0; 
+            display: flex; /* Flexboxに変更 */
+            justify-content: space-between; /* 要素を左右に寄せる */
+            align-items: center;
+        }
+        .project-name-display {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            max-width: 400px; /* PCでの最大幅を確保 */
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #f0f0f0;
+            padding: 0 12px;
+        }
+
+        .sidebar { 
+            background-color: #212121; 
+            width: 60px; 
+            transition: width 0.3s; 
+            overflow: hidden; 
+            flex-shrink: 0; 
+            border-right: 1px solid #333;
+            will-change: width;
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+        }
+        .sidebar:not(.expanded):hover {
+            width: 250px;
+        }
+        .sidebar.expanded { width: 250px; }
+        .sidebar-item { 
+            display: flex; 
+            align-items: center; 
+            padding: 10px 0; 
+            cursor: pointer; 
+            transition: background-color 0.2s;
+            height: 52px; 
+        }
+        .sidebar-item:hover { background-color: #333; }
+        .sidebar-text { margin-left: 15px; white-space: nowrap; opacity: 0; transition: opacity 0.3s; }
+        .sidebar:not(.expanded):hover .sidebar-text,
+        .sidebar.expanded .sidebar-text { opacity: 1; }
+        .sidebar-icon { 
+            font-size: 24px; 
+            color: #a0a0a0;
+            width: 60px; 
+            height: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center; 
+            flex-shrink: 0;
+        }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 50; }
+        
+        /* モーダルのスクロール修正: 参照用モーダルのみ最大高さを画面に合わせ、オーバーフローを抑制 */
+        .modal-content { 
+            background: #2b2b2b; 
+            padding: 24px; 
+            border-radius: 8px; 
+            max-width: 90%; 
+            max-height: 90vh; /* 通常モーダルは90vh */
+            overflow-y: auto; 
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5); 
+        }
+        /* 参照用画像モーダルの修正 */
+        #reference-image-modal .modal-content {
+            max-height: 90vh; 
+            overflow-y: hidden; 
+            width: fit-content;
+            padding: 24px;
+        }
+        
+        #ref-canvas-wrapper {
+             max-width: 98vw;
+             max-height: 70vh; 
+             width: fit-content;
+             height: fit-content;
+             display: flex;
+             justify-content: center;
+             align-items: center;
+        }
+        #reference-image-canvas {
+            border: 1px solid #444;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; 
+            /* ドロップ領域として使用するためのスタイル */
+            transition: border-color 0.2s;
+            position: relative;
+        }
+        #reference-image-canvas.drag-over {
+            border-color: #58a6ff;
+            box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+        }
+
+        input[type="text"], textarea, select, .slider-box, input[type="number"] { background-color: #333; border: 1px solid #555; color: #f0f0f0; border-radius: 4px; padding: 8px; }
+        input[type="range"] { -webkit-appearance: none; width: 100%; height: 6px; background: #555; border-radius: 3px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #238636; border-radius: 50%; cursor: pointer; }
+
+        .scene-editor-container { background-color: #2b2b2b; border-radius: 8px; padding: 16px; }
+        
+        /* タイムライン */
+        .timeline-container { 
+            width: 200px; 
+            background-color: #212121; 
+            border-left: 1px solid #333; 
+            flex-shrink: 0; 
+            display: flex;
+            flex-direction: column;
+            height: 100%; 
+        }
+        
+        .timeline-header {
+            background-color: #212121;
+            border-bottom: 1px solid #333;
+            padding: 12px;
+            flex-shrink: 0;
+            width: 100%;
+        }
+        
+        #timeline-track-container {
+            flex-grow: 1; 
+            position: relative; 
+            padding: 0; 
+            overflow-y: auto; 
+            min-height: 0; 
+        }
+        .timeline-footer {
+            background-color: #212121;
+            border-top: 1px solid #333;
+            height: 52px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 12px;
+            flex-shrink: 0; 
+        }
+
+
+        .timeline-item { 
+            padding: 10px 15px; 
+            border-bottom: 1px solid #333; 
+            cursor: grab; 
+            position: relative; 
+            transition: background-color 0.1s;
+        }
+        .timeline-item:hover { background-color: #333; }
+        .timeline-item.active { border-right: 4px solid #58a6ff; background-color: #333; }
+        .timeline-item.dragging { opacity: 0.5; } 
+
+        /* Canvas スケッチエリア */
+        #sketch-area { 
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        #sketch-wrapper { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            background: #000; 
+            border-radius: 4px; 
+            padding: 10px; 
+            margin: 16px; 
+        }
+        #sketch-container { 
+            background: #111; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            position: relative; 
+            border: 2px solid #238636;
+            width: 100%; 
+            margin-top: 30px; 
+            margin-bottom: 30px; 
+            height: 0;
+        }
+        /* Z-indexの修正 */
+        #drawing-canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 30; /* Canvasを手書きのために前面へ */
+            cursor: crosshair; 
+        }
+        #character-placement-area {
+            position: absolute; 
+            inset: 0; 
+            z-index: 40; /* Char Areaを最前面に設定 */
+            pointer-events: none; /* JavaScriptで制御 */
+        }
+        /* Z-indexの修正終わり */
+        
+        #scene-time-display { 
+            align-self: flex-start; 
+            margin-left: 10px;
+            margin-bottom: 5px;
+            font-size: 1.5rem; 
+            font-weight: bold;
+        }
+        #sketch-prompt-overlay {
+            width: 100%;
+            padding: 8px 10px;
+            background: #2b2b2b;
+            border-top: 1px solid #333;
+            color: #f0f0f0;
+            font-size: 0.875rem;
+            white-space: pre-wrap;
+            box-sizing: border-box;
+        }
+        
+        .drag-char { 
+            position: absolute; 
+            padding: 5px 10px; 
+            background: rgba(255, 255, 255, 0.1); 
+            border: 1px dashed #fff; 
+            border-radius: 4px; 
+            cursor: grab; 
+            font-size: 14px; 
+            white-space: nowrap; 
+            z-index: 50; /* キャラ要素自体はChar Area内で最前面 */
+            user-select: none; 
+            transform-origin: top left; 
+        }
+
+        .total-time-exceeded {
+            color: #f00; 
+            font-weight: bold;
+        }
+
+        .project-menu {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            background: #333;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            z-index: 60;
+            display: none;
+        }
+        .project-menu button {
+            padding: 8px 12px;
+            text-align: left;
+            width: 100%;
+            display: block;
+            white-space: nowrap;
+            transition: background-color 0.1s;
+        }
+        .project-menu button:hover {
+            background-color: #555;
+        }
+        
+        .history-project-item {
+             padding: 0 10px; 
+             transition: background-color 0.2s;
+        }
+        .history-project-item:hover {
+            background-color: #333;
+        }
+        .project-menu-btn {
+            background-color: transparent;
+            border-radius: 50%;
+            padding: 5px;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+            font-size: 1.2rem; 
+        }
+        .project-menu-btn:hover {
+            background-color: #555;
+        }
+        
+        /* スケッチモード切り替え用 */
+        .mode-button-active {
+            background-color: #58a6ff !important;
+            box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+        }
+        
+        /* キャラ配置モーダル (新しいキャラ選択用) */
+        #character-placement-modal .modal-content {
+            max-width: 500px;
+            max-height: 70vh;
+        }
+        /* キャラ管理モーダル内の画像エリア */
+        .image-drop-area {
+            border: 2px dashed #4a4a4a;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            background-color: #333;
+            border-radius: 4px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .image-drop-area:hover {
+            background-color: #444;
+            border-color: #58a6ff;
+        }
+        .image-preview {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body class="flex">
+
+    <!-- 1. 左端: 履歴管理サイドバー -->
+    <div id="sidebar" class="sidebar h-full flex flex-col pt-2"
+         onmouseenter="if (!isSidebarExpanded) toggleSidebarHover(true)"
+         onmouseleave="if (!isSidebarExpanded) toggleSidebarHover(false)">
+        
+        <!-- 上部メニュー -->
+        <div class="sidebar-item" onclick="toggleMenu()">
+            <span class="sidebar-icon">☰</span>
+            <span class="sidebar-text font-bold" id="menu-toggle-text">メニューを固定</span>
+        </div>
+        <div class="sidebar-item mt-4" onclick="openNewProjectModal()">
+            <span class="sidebar-icon">✎</span>
+            <span class="sidebar-text">新規作成</span>
+        </div>
+        <div id="history-list" class="flex-grow overflow-y-auto mt-2 p-2" style="display: none;">
+            <!-- 履歴アイテムがここに挿入されます (展開時のみ表示) -->
+        </div>
+        
+        <!-- 下部固定メニュー -->
+        <div class="mt-auto">
+            <!-- 👫 キャラ管理 -->
+            <div class="sidebar-item" onclick="openModal('character-modal')">
+                <span class="sidebar-icon">👫</span>
+                <span class="sidebar-text">キャラ管理 (共通設定)</span>
+            </div>
+            
+            <!-- ⚙ システム設定 -->
+            <div class="sidebar-item mb-2" onclick="openModal('system-settings-modal')">
+                <span class="sidebar-icon">⚙</span>
+                <span class="sidebar-text">システム設定</span>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- 2. メインコンテンツエリア (Flex Growで残りの領域を占める) -->
+    <div class="flex-grow flex flex-col h-full">
+        
+        <!-- ヘッダーバー (プロジェクト名とボタン群) -->
+        <div id="header-bar" class="header-bar p-3">
+            <span id="project-name-display" class="project-name-display" title="">プロジェクト名</span>
+            <div class="flex justify-end space-x-4">
+                <button class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded" onclick="openModal('general-settings-modal')">基本設定</button>
+                <button class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded" onclick="openModal('prompt-modal')">プロンプト確認</button>
+                <button class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded" onclick="openModal('reference-image-modal')">参照用画像確認</button>
+            </div>
+        </div>
+
+        <!-- メイン編集エリア (ヘッダーの下の残りの高さを占める) -->
+        <div class="flex-grow flex h-full overflow-hidden">
+            
+            <!-- 3. タイムラインエリア (左側に配置) -->
+            <div class="timeline-container h-full flex flex-col" style="border-right: 1px solid #333; border-left: none;">
+                <div class="timeline-header flex justify-between items-center">
+                    <button class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-sm font-bold" onclick="addScene()">シーン追加</button>
+                </div>
+                
+                <div id="timeline-track-container" class="relative overflow-y-auto" style="flex-grow: 1; min-height: 0;">
+                    <!-- シーンアイテムがここに縦に並びます -->
+                </div>
+
+                <div class="timeline-footer">
+                    <span id="total-duration-display" class="font-bold text-lg">合計 00:00</span>
+                    <div></div>
+                </div>
+            </div>
+
+            <!-- シーン編集 + スケッチエリア (右側に配置) -->
+            <div class="flex-grow flex h-full overflow-hidden">
+                <!-- シーン編集フォーム (左側) -->
+                <div id="scene-editor-container" class="scene-editor-container w-1/2 p-4 mr-4 flex flex-col overflow-y-auto" style="box-sizing: border-box;">
+                    <!-- JSによりコンテンツが挿入されます -->
+                </div>
+
+                <!-- スケッチエリア (右側) -->
+                <div id="sketch-area" class="scene-editor-container w-1/2 p-4 hidden flex flex-col" style="box-sizing: border-box;">
+                    <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                        <h2 class="text-2xl font-semibold text-[#58a6ff]">スケッチ</h2>
+                        <div class="space-x-2 flex items-center">
+                            <!-- モード切り替え: チェックボックス -->
+                            <label for="mode-draw-checkbox" class="flex items-center space-x-2 bg-gray-700 px-3 py-2 rounded cursor-pointer hover:bg-gray-600">
+                                <input type="checkbox" id="mode-draw-checkbox" onchange="setSketchMode(this.checked ? 'draw' : 'char')" checked class="rounded bg-gray-600 border-gray-500 text-blue-600 focus:ring-blue-500">
+                                <span>手書きモード</span>
+                            </label>
+                            
+                            <!-- キャラ追加ボタン (既存キャラの配置用モーダルを開く) -->
+                            <button class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded" onclick="openCharacterPlacementModal()">キャラ追加</button>
+                            <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded" onclick="clearSketch()">クリア</button>
+                        </div>
+                    </div>
+
+                    <div id="sketch-wrapper" class="flex-grow flex flex-col items-center overflow-y-auto" style="min-height: 0;">
+                        <span id="scene-time-display" class="text-2xl font-mono text-green-500 flex-shrink-0">00:01</span>
+                        <div id="sketch-container" class="relative w-full h-auto flex-shrink-0">
+                            <!-- Z-indexを30に設定 -->
+                            <canvas id="drawing-canvas" class="z-30" width="400" height="711"></canvas>
+                            <!-- Z-indexを40に設定 -->
+                            <div id="character-placement-area" class="absolute inset-0 z-40 pointer-events-none">
+                                <!-- ドラッグ可能なキャラ要素がここに挿入されます -->
+                            </div>
+                        </div>
+                        <div id="sketch-prompt-overlay" class="mt-4 flex-shrink-0">
+                            <!-- シーン説明プロンプトがここにオーバーレイされます -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+    
+    <!-- モーダル定義エリア -->
+
+    <!-- 新規プロジェクト作成モーダル -->
+    <div id="new-project-modal" class="modal-overlay">
+        <div class="modal-content w-full md:w-1/2">
+            <h2 class="text-2xl font-bold mb-4">新規プロジェクト作成</h2>
+            <p class="text-gray-400 mb-4">新しい動画プロジェクトの基本設定を入力してください。</p>
+            <div class="space-y-4">
+                <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">プロジェクト名（履歴名）</label>
+                    <input type="text" id="new-project-name" class="w-full" placeholder="例: 未来都市の追跡劇">
+                </div>
+                <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">動画の総時間 (秒)</label>
+                    <input type="number" id="new-total-duration" min="1" value="10" class="w-full">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-4 mt-6">
+                <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded" onclick="closeModal('new-project-modal')">キャンセル</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" onclick="createProjectFromModal()">作成して編集開始</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 基本設定モーダル (内容修正済み) -->
+    <div id="general-settings-modal" class="modal-overlay">
+        <div class="modal-content w-full md:w-1/2">
+            <h2 class="text-2xl font-bold mb-4">基本設定</h2>
+            <div class="space-y-4">
+                <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">プロジェクト名（履歴名）</label>
+                    <input type="text" id="project-name" class="w-full" oninput="updateGeneralSetting(false)" placeholder="例: 未来都市の追跡劇">
+                </div>
+                <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">動画の総時間 (秒) - タイムラインの基準</label>
+                    <input type="number" id="total-video-duration" min="1" value="10" class="w-full" onchange="updateGeneralSetting(true)">
+                </div>
+                <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">画角設定</label>
+                    <select id="aspect-ratio" class="w-full p-2" onchange="updateGeneralSetting(true)">
+                        <option value="16:9_horizontal">▬ 16:9 (Landscape)</option>
+                        <option value="9:16_vertical">▮ 9:16 (Portrait)</option>
+                    </select>
+                </div>
+                
+                <!-- プロジェクト使用キャラの設定追加 -->
+                <h3 class="text-xl mt-4 border-t border-gray-600 pt-3">プロジェクト使用キャラ</h3>
+                <div id="project-characters-list" class="space-y-2">
+                    <!-- 使用キャラリストがここに挿入される -->
+                </div>
+                <button class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm" onclick="openCharacterSelectionModal()">+ キャラクターをプロジェクトに追加</button>
+                
+                
+                <h3 class="text-xl mt-4 border-t border-gray-600 pt-3">デフォルト設定</h3>
+                 <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">デフォルトカラー（コンセプト）</label>
+                    <select id="default-color-select" class="w-full p-2" onchange="updateGeneralSetting(true)"></select>
+                    <input type="text" id="default-color-input" placeholder="自由入力 (例: Neo-Tokyo Synthwave)" class="w-full mt-1" oninput="updateGeneralSetting(false)">
+                </div>
+                 <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">デフォルトカメラ</label>
+                    <select id="default-camera-select" class="w-full p-2" onchange="updateGeneralSetting(true)"></select>
+                    <input type="text" id="default-camera-input" placeholder="自由入力 (例: Dolly zoom)" class="w-full mt-1" oninput="updateGeneralSetting(false)">
+                </div>
+                <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">デフォルト場所</label>
+                    <select id="default-location-select" class="w-full p-2" onchange="updateGeneralSetting(true)"></select>
+                    <input type="text" id="default-location-input" placeholder="自由入力 (例: 賑やかな渋谷の交差点)" class="w-full mt-1" oninput="updateGeneralSetting(false)">
+                </div>
+                <div class="input-group">
+                    <label class="block text-sm font-medium mb-1">デフォルトサウンド</label>
+                    <select id="default-sound-select" class="w-full p-2" onchange="updateGeneralSetting(true)"></select>
+                    <input type="text" id="default-sound-input" placeholder="自由入力 (例: Lo-fi hip-hop track)" class="w-full mt-1" oninput="updateGeneralSetting(false)">
+                </div>
+            </div>
+            <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded mt-6 float-right" onclick="closeModal('general-settings-modal')">閉じる</button>
+        </div>
+    </div>
+    
+    <!-- システム設定モーダル (名称変更) -->
+    <div id="system-settings-modal" class="modal-overlay">
+        <div class="modal-content w-full md:w-1/2">
+            <h2 class="text-2xl font-bold mb-4">システム設定</h2>
+            <div class="space-y-4">
+                <p class="text-gray-400">バックアップとデータ移行のための設定です。</p>
+
+                <h3 class="text-xl border-t border-gray-600 pt-3">エクスポート（バックアップ）</h3>
+                <p class="text-sm text-gray-400">全プロジェクトと共通キャラ設定をJSONファイルとしてダウンロードします。</p>
+                <button onclick="exportAllData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">全設定をエクスポート</button>
+                
+                <h3 class="text-xl border-t border-gray-600 pt-3">インポート（復元・移行）</h3>
+                <p class="text-sm text-gray-400">バックアップJSONファイルを選択し、現在の設定を上書きします。（<span class="text-red-400">注意: 現在のデータは失われます</span>）</p>
+                <input type="file" id="import-file-uploader" accept=".json" class="hidden" onchange="importAllData(event)">
+                <button onclick="document.getElementById('import-file-uploader').click()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded">設定をインポート</button>
+            </div>
+            <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded mt-6 float-right" onclick="closeModal('system-settings-modal')">閉じる</button>
+        </div>
+    </div>
+
+
+    <!-- キャラ管理モーダル -->
+    <div id="character-modal" class="modal-overlay">
+        <div class="modal-content w-full md:w-2/3">
+            <h2 class="text-2xl font-bold mb-4">キャラ管理 (共通)</h2>
+             <div id="character-list-modal" class="space-y-4">
+                <!-- キャラクター項目がJSによってここに挿入される -->
+            </div>
+            <button onclick="addCharacter()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded mt-4">+ キャラクター追加</button>
+            <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded mt-6 float-right" onclick="closeModal('character-modal')">閉じる</button>
+        </div>
+    </div>
+    
+    <!-- キャラクター選択モーダル (プロジェクトで使用するキャラを選択) -->
+    <div id="character-selection-modal" class="modal-overlay">
+        <div class="modal-content w-full md:w-1/3">
+            <h2 class="text-2xl font-bold mb-4">プロジェクトに使用するキャラを選択</h2>
+            <div id="available-characters-list" class="space-y-3">
+                <!-- 全キャラリストがここに表示される -->
+            </div>
+            <div class="flex justify-end space-x-4 mt-6">
+                <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" onclick="closeModal('character-selection-modal')">完了</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- プロンプト確認モーダル -->
+    <div id="prompt-modal" class="modal-overlay">
+        <div class="modal-content w-full md:w-3/4">
+            <h2 class="text-2xl font-bold mb-4">プロンプト確認 (JSON出力)</h2>
+            <textarea id="prompt-output" rows="20" readonly class="w-full p-4 bg-gray-800 border border-gray-700 rounded text-sm font-mono"></textarea>
+            <button onclick="copyOutput()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mt-4">JSONをコピー</button>
+            <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded mt-6 float-right" onclick="closeModal('prompt-modal')">閉じる</button>
+        </div>
+    </div>
+
+    <!-- 参照用画像確認モーダル -->
+    <div id="reference-image-modal" class="modal-overlay">
+        <div class="modal-content w-full">
+            <h2 class="text-2xl font-bold mb-4">参照用画像確認</h2>
+            
+            <div id="ref-canvas-wrapper" 
+                 class="bg-gray-800 p-2 rounded-lg flex justify-center" 
+                 style="width: 100%; height: 70vh;">
+                <!-- Canvas描画領域 (横長になる) - ドラッグイベントを直接 Canvas に追加 -->
+                <canvas id="reference-image-canvas" 
+                        class="border border-gray-600 rounded" 
+                        style="width: 100%; height: 100%; object-fit: contain;"
+                        ondragover="event.preventDefault(); this.classList.add('drag-over');"
+                        ondragleave="this.classList.remove('drag-over');"
+                        ondrop="handleReferenceImageDrop(event)">
+                </canvas>
+            </div>
+            
+            <!-- ボタン配置の修正 -->
+            <div class="flex justify-between items-center mt-4">
+                <div class="flex space-x-4">
+                    <input type="file" id="reference-image-uploader" accept="image/*" style="display: none;" onchange="uploadReferenceImage(event)">
+                    <!-- ボタンのクリックイベントは、ファイルアップローダーをトリガーする -->
+                    <button class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded" onclick="document.getElementById('reference-image-uploader').click()">画像読込 (先頭フレーム)</button>
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" onclick="downloadReferenceImage()">ダウンロード</button>
+                </div>
+                 <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded" onclick="closeModal('reference-image-modal')">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- キャラ配置モーダル (新規キャラ追加用) -->
+    <div id="character-placement-modal" class="modal-overlay">
+        <div class="modal-content w-full md:w-1/3">
+            <h2 class="text-2xl font-bold mb-4">キャラ配置 - 新規キャラ追加</h2>
+            <div id="placement-character-list" class="space-y-3">
+                <!-- プロジェクトに追加されたキャラのみがここに表示される -->
+            </div>
+            <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded mt-6 float-right" onclick="closeModal('character-placement-modal')">キャンセル</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 状態管理と初期データ ---
+        const STORAGE_KEY_CHARACTERS = 'video_prompt_tool_characters';
+        const STORAGE_KEY_PROJECTS = 'video_prompt_tool_projects';
+        
+        // 恒久的なプロジェクトキー
+        const PROJECT_KEY_PREFIX = 'video_prompt_tool_project_'; 
+
+        const APP_EXPORT_VERSION = '1.0';
+        
+        // --- ID 生成関数 (プロジェクト名に依存しない一意な ID) ---
+        function generateProjectId() {
+            // 例: タイムスタンプ + 3桁のランダムな数字
+            return `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        }
+
+        function getProjectKey(projectId) {
+             return `${PROJECT_KEY_PREFIX}${projectId}`;
+        }
+        
+        // デフォルトの状態 (初期サンプルプロジェクト)
+        const DEFAULT_STATE = {
+            generalSettings: {
+                // 新しい ID を割り当てる
+                projectId: generateProjectId(), 
+                projectName: 'サンプルプロジェクト',
+                totalDuration: 8, // 動画の総時間 (秒)
+                aspectRatio: '9:16_vertical',
+                defaultColor: 'Cyberpunk Neon', // 追加
+                defaultCamera: 'Tracking Shot',
+                defaultLocation: 'City Park',
+                defaultSound: 'Ambient Music',
+                outputFormat: 'json',
+                referenceImage: null, // 参照用画像 (Base64)
+                projectCharacters: [1, 2], // プロジェクトで使用するキャラIDのリストを追加
+            },
+            scenes: [
+                { 
+                    id: Date.now() + 10, 
+                    name: 'シーン 1',
+                    duration: 2, 
+                    timeStart: '00:00', 
+                    end: '00:02',   
+                    color: { setting: 'Vibrant Green', inherit: false }, // 追加
+                    camera: { setting: 'Close-up', inherit: false }, 
+                    location: { setting: 'City Park', inherit: false }, 
+                    sound: { setting: 'Ambient Music', inherit: false }, 
+                    promptDescription: 'Mel is cheerfully walking through a park.', 
+                    sketchData: { handDrawn: '', characters: [{ id: 1, x: 100, y: 100, name: 'メル' }] } // サンプルデータにキャラ配置を追加
+                },
+                { 
+                    id: Date.now() + 20, 
+                    name: 'シーン 2',
+                    duration: 3, 
+                    timeStart: '00:02', 
+                    end: '00:05',   
+                    color: { setting: 'Inherit', inherit: true }, // 追加
+                    camera: { setting: 'Wide Shot', inherit: false }, 
+                    location: { setting: 'City Park', inherit: true }, 
+                    sound: { setting: 'Ambient Music', inherit: true }, 
+                    promptDescription: 'Mika suddenly appears behind the bench, looking mysterious.', 
+                    sketchData: { handDrawn: '', characters: [{ id: 2, x: 200, y: 300, name: 'ミカ' }] } // サンプルデータにキャラ配置を追加
+                },
+            ],
+            activeSceneId: null,
+        };
+
+        // 日本語ラベルと選択肢の定義
+        const STATIC_OPTIONS = {
+            color: { label: 'カラー', options: [
+                { en: 'Vibrant Green', jp: '鮮やかな緑' },
+                { en: 'Monochrome B&W', jp: 'モノクロ白黒' },
+                { en: 'Pastel Dreams', jp: 'パステル調の夢' },
+                { en: 'Cyberpunk Neon', jp: 'サイバーパンクネオン' }
+            ]},
+            camera: { label: 'カメラ', options: [
+                { en: 'Wide Shot', jp: 'ワイドショット (全体)' },
+                { en: 'Close-up', jp: 'クローズアップ (顔)' },
+                { en: 'Medium Shot', jp: 'ミディアムショット (半身)' },
+                { en: 'Dolly Zoom', jp: 'ドリー・ズーム (背景変化)' },
+                { en: 'Tracking Shot', jp: 'トラッキングショット (追尾)' }
+            ]},
+            location: { label: '場所', options: [
+                { en: 'Home Bedroom', jp: '自宅の寝室' },
+                { en: 'City Park', jp: '都市公園' },
+                { en: 'Busy Street', jp: '賑やかな通り' },
+                { en: 'Mountain Top', jp: '山頂' }
+            ]},
+            sound: { label: 'サウンド', options: [
+                { en: 'No Sound', jp: '音なし' },
+                { en: 'Ambient Music', jp: 'アンビエントミュージック' },
+                { en: 'Rain Sounds', jp: '雨の音' },
+                { en: 'Car Horns', jp: '車のクラクション' }
+            ]}
+        };
+        
+        let state = DEFAULT_STATE;
+        // 初期データから imageUrl を削除し、base64Image を追加
+        let allCharacters = [
+            { id: 1, name: 'メル', base64Image: null, description: '明るい赤毛の少女、元気いっぱい' },
+            { id: 2, name: 'ミカ', base64Image: null, description: '青い髪の少女、クールで理知的' },
+        ];
+        let projectHistory = []; // { projectId, name, lastModified }
+
+        // Canvas描画用変数
+        let canvas, ctx;
+        let isDrawing = false;
+        let lastX = 0, lastY = 0;
+        let activeDragChar = null;
+        let canvasWidth = 400; // スケッチ Canvas の内部解像度 (9:16)
+        let canvasHeight = 711; // スケッチ Canvas の内部解像度 (9:16)
+        let isSidebarExpanded = false; // サイドバーの初期状態は閉じる
+        let currentSketchMode = 'draw'; // 'draw' or 'char'
+        
+        let dragSourceEl = null;
+
+        // --- データ永続化 (localStorage) ---
+
+        function saveAll() {
+            try {
+                // プロジェクト ID をキーとして使用
+                const projectId = state.generalSettings.projectId;
+                const projectData = {
+                    id: projectId, // IDは変更しない
+                    name: state.generalSettings.projectName, // 名前は変更される可能性がある
+                    lastModified: Date.now(),
+                    generalSettings: state.generalSettings,
+                    scenes: state.scenes.map((s, index) => ({ ...s, name: `シーン ${index + 1}` })), // シーン名を更新して保存
+                    activeSceneId: state.activeSceneId,
+                };
+                localStorage.setItem(getProjectKey(projectId), JSON.stringify(projectData));
+
+                const existingIndex = projectHistory.findIndex(p => p.projectId === projectId);
+                const historyEntry = { projectId: projectId, name: state.generalSettings.projectName, lastModified: Date.now() };
+                if (existingIndex > -1) {
+                    projectHistory[existingIndex] = historyEntry;
+                } else {
+                    projectHistory.push(historyEntry);
+                }
+                localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projectHistory));
+
+                localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(allCharacters));
+            } catch (error) {
+                console.error('Failed to save state to localStorage:', error);
+            }
+        }
+
+        function loadAll() {
+            try {
+                // 1. キャラクターを読み込み
+                const storedCharacters = localStorage.getItem(STORAGE_KEY_CHARACTERS);
+                if (storedCharacters) {
+                    allCharacters = JSON.parse(storedCharacters);
+                }
+                allCharacters = allCharacters.map(char => {
+                    if (char.imageUrl && !char.base64Image) {
+                        char.base64Image = null; 
+                    } else if (!char.base64Image) {
+                         char.base64Image = null;
+                    }
+                    delete char.imageUrl;
+                    return char;
+                });
+
+
+                // 2. 履歴を読み込み
+                const storedHistory = localStorage.getItem(STORAGE_KEY_PROJECTS);
+                if (storedHistory) {
+                    projectHistory = JSON.parse(storedHistory);
+                } else {
+                    // 古いプロジェクト名ベースのキーがあればマイグレーション
+                    migrateOldProjects();
+                }
+
+                // 3. 現在のプロジェクトを読み込み（なければデフォルト）
+                if (projectHistory.length > 0) {
+                    projectHistory.sort((a, b) => b.lastModified - a.lastModified);
+                    loadProject(projectHistory[0].projectId, false); // UI更新はloadProjectに任せる
+                } else {
+                    // デフォルトプロジェクトを初期化
+                    state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                    state.activeSceneId = state.scenes[0].id;
+                    saveAll();
+                }
+            } catch (error) {
+                console.error('Failed to load state from localStorage:', error);
+                state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+            }
+            
+            // 4. データ構造のマイグレーション（シーンデータ）
+            if (state.scenes && state.scenes.length > 0) {
+                state.scenes.forEach(scene => {
+                    if (scene.color === undefined) {
+                        scene.color = { setting: 'Inherit', inherit: true };
+                    }
+                });
+            }
+            if (state.generalSettings.referenceImage === undefined) {
+                state.state.generalSettings.referenceImage = null;
+            }
+             if (state.generalSettings.projectCharacters === undefined) {
+                state.generalSettings.projectCharacters = [];
+            }
+        }
+        
+        // 古いプロジェクトキーから新しいキーへのマイグレーション関数
+        function migrateOldProjects() {
+            const oldProjectKeys = Object.keys(localStorage).filter(key => key.startsWith('project_'));
+            
+            oldProjectKeys.forEach(oldKey => {
+                const projectData = JSON.parse(localStorage.getItem(oldKey));
+                
+                // 新しい ID を生成し、データに割り当てて新しいキーで保存
+                const newId = generateProjectId();
+                projectData.generalSettings.projectId = newId;
+                
+                localStorage.setItem(getProjectKey(newId), JSON.stringify(projectData));
+                
+                // 履歴に追加
+                projectHistory.push({
+                    projectId: newId,
+                    name: projectData.generalSettings.projectName,
+                    lastModified: projectData.lastModified,
+                });
+                
+                // 古いキーを削除
+                localStorage.removeItem(oldKey);
+            });
+
+            // 新しい履歴リストを保存
+            if (projectHistory.length > 0) {
+                 localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projectHistory));
+            }
+        }
+
+
+        function loadProject(projectId, saveAndRender = true) {
+            const storedProject = localStorage.getItem(getProjectKey(projectId));
+            if (storedProject) {
+                const loadedData = JSON.parse(storedProject);
+                
+                // ロードしたプロジェクト ID を現在の状態に設定
+                loadedData.generalSettings.projectId = projectId; 
+
+                state.generalSettings = loadedData.generalSettings;
+                state.scenes = loadedData.scenes;
+                state.activeSceneId = loadedData.activeSceneId;
+            }
+            // データマイグレーションを再度実行
+            if (state.scenes && state.scenes.length > 0) {
+                state.scenes.forEach(scene => {
+                    if (scene.color === undefined) {
+                        scene.color = { setting: 'Inherit', inherit: true };
+                    }
+                });
+            }
+            if (state.generalSettings.referenceImage === undefined) {
+                state.generalSettings.referenceImage = null;
+            }
+            if (state.generalSettings.projectCharacters === undefined) {
+                state.generalSettings.projectCharacters = [];
+            }
+            
+            if (saveAndRender) {
+                saveAll();
+                setupCanvasListeners(); 
+                renderAll();
+                selectScene(state.activeSceneId || state.scenes[0]?.id);
+            }
+        }
+        
+        function duplicateProject(projectId) {
+            const storedProject = localStorage.getItem(getProjectKey(projectId));
+            if (!storedProject) return;
+
+            const originalData = JSON.parse(storedProject);
+            const newName = `${originalData.generalSettings.projectName} (コピー)`;
+            const newId = generateProjectId(); 
+
+            const newProjectData = JSON.parse(JSON.stringify(originalData));
+            newProjectData.id = newId;
+            newProjectData.name = newName;
+            newProjectData.lastModified = Date.now();
+            newProjectData.generalSettings.projectName = newName;
+            newProjectData.generalSettings.projectId = newId; // 新しい ID を設定
+            
+            localStorage.setItem(getProjectKey(newId), JSON.stringify(newProjectData));
+
+            projectHistory.push({ projectId: newId, name: newName, lastModified: newProjectData.lastModified });
+            saveAll(); 
+            loadProject(newId);
+        }
+        
+        function deleteProject(projectId) {
+            if (projectHistory.length <= 1) {
+                alert('最後のプロジェクトは削除できません。');
+                return;
+            }
+            const projectToDelete = projectHistory.find(p => p.projectId === projectId);
+            if (!confirm(`プロジェクト「${projectToDelete ? projectToDelete.name : projectId}」を完全に削除しますか？`)) return;
+
+            localStorage.removeItem(getProjectKey(projectId));
+            
+            projectHistory = projectHistory.filter(p => p.projectId !== projectId);
+            
+            if (state.generalSettings.projectId === projectId) {
+                loadProject(projectHistory[0].projectId);
+            } else {
+                saveAll();
+                renderAll();
+            }
+        }
+
+
+        function renderAll() {
+            recalculateSceneTimes();
+            renderHistoryList();
+            renderSceneEditor();
+            updateOutput();
+            updateHeaderProjectName();
+        }
+        
+        function updateHeaderProjectName() {
+            const displayNameEl = document.getElementById('project-name-display');
+            if (displayNameEl) {
+                const projectName = state.generalSettings.projectName;
+                displayNameEl.textContent = projectName;
+                displayNameEl.title = projectName;
+            }
+        }
+
+
+        function openNewProjectModal() {
+            document.getElementById('new-project-name').value = '新しいプロジェクト ' + (projectHistory.length + 1);
+            document.getElementById('new-total-duration').value = 10;
+            openModal('new-project-modal');
+        }
+
+        function createProjectFromModal() {
+            const newName = document.getElementById('new-project-name').value.trim();
+            const newDuration = parseInt(document.getElementById('new-total-duration').value);
+
+            if (!newName) {
+                alert('プロジェクト名を入力してください。');
+                return;
+            }
+            if (newDuration < 1 || isNaN(newDuration)) {
+                alert('動画の総時間は1秒以上で入力してください。');
+                return;
+            }
+
+            const newState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+            newState.generalSettings.projectId = generateProjectId(); // 新しいIDを生成
+            newState.generalSettings.projectName = newName;
+            newState.generalSettings.totalDuration = newDuration;
+            newState.scenes = [];
+            newState.activeSceneId = null;
+            
+            state = newState;
+            
+            if (canvas) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            saveAll();
+            closeModal('new-project-modal');
+            renderAll();
+        }
+
+        // --- UIヘルper ---
+
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.style.display = 'flex';
+                if (id === 'general-settings-modal') renderGeneralSettingsModal();
+                if (id === 'character-modal') renderCharacterModal();
+                if (id === 'prompt-modal') updateOutput();
+                if (id === 'reference-image-modal') drawReferenceImage();
+                if (id === 'system-settings-modal') renderSystemSettingsModal();
+            }
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.style.display = 'none';
+        }
+        
+        function toggleSidebarHover(isHovering) {
+            const sidebar = document.getElementById('sidebar');
+            if (!isSidebarExpanded) {
+                sidebar.style.width = isHovering ? '250px' : '60px';
+                document.getElementById('history-list').style.display = isHovering ? 'block' : 'none';
+            }
+        }
+
+        function toggleMenu() {
+            isSidebarExpanded = !isSidebarExpanded;
+            const sidebar = document.getElementById('sidebar');
+            
+            if (isSidebarExpanded) {
+                sidebar.classList.add('expanded');
+                sidebar.style.width = '250px';
+                document.getElementById('menu-toggle-text').textContent = 'メニューを閉じる';
+                document.getElementById('history-list').style.display = 'block';
+            } else {
+                sidebar.classList.remove('expanded');
+                sidebar.style.width = '60px';
+                document.getElementById('menu-toggle-text').textContent = 'メニューを固定';
+                document.getElementById('history-list').style.display = 'none';
+            }
+        }
+
+        function renderSystemSettingsModal() {
+            document.getElementById('system-settings-modal').querySelector('.modal-content h2').textContent = 'システム設定';
+            document.getElementById('import-file-uploader').value = '';
+        }
+
+        // --- エクスポート/インポート機能 ---
+
+        function exportAllData() {
+            const dataToExport = {
+                appVersion: APP_EXPORT_VERSION,
+                characters: allCharacters,
+                projects: projectHistory.map(p => {
+                    const projectData = localStorage.getItem(getProjectKey(p.projectId));
+                    return {
+                        id: p.projectId,
+                        name: p.name,
+                        data: JSON.parse(projectData || '{}')
+                    }
+                })
+            };
+
+            const dataStr = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `PromptTool_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importAllData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    
+                    if (!importedData.appVersion || !importedData.characters || !importedData.projects) {
+                        throw new Error("無効なファイル形式です。");
+                    }
+                    
+                    if (importedData.appVersion !== APP_EXPORT_VERSION) {
+                         console.warn("バージョン不一致: インポートされたデータは現在のアプリバージョンと異なります。");
+                    }
+
+                    // 1. 全てのローカルストレージデータをクリア
+                    Object.keys(localStorage).filter(key => key.startsWith(PROJECT_KEY_PREFIX)).forEach(key => localStorage.removeItem(key));
+                    localStorage.removeItem(STORAGE_KEY_PROJECTS);
+                    localStorage.removeItem(STORAGE_KEY_CHARACTERS);
+
+                    // 2. データを保存
+                    allCharacters = importedData.characters;
+                    projectHistory = [];
+                    
+                    importedData.projects.forEach(project => {
+                        const projectId = project.id;
+                        // ロード時に ID があることを確認
+                        if (!projectId) return; 
+                        
+                        localStorage.setItem(getProjectKey(projectId), JSON.stringify(project.data));
+                        projectHistory.push({ projectId: projectId, name: project.name, lastModified: Date.now() });
+                    });
+
+                    // 3. 履歴とキャラを保存
+                    localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projectHistory));
+                    localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(allCharacters));
+                    
+                    // 4. UI再読み込み
+                    alert("データのインポートが完了しました。最新のプロジェクトを開きます。");
+                    closeModal('system-settings-modal');
+                    loadAll(); 
+                    renderHistoryList();
+                } catch (error) {
+                    alert(`データのインポートに失敗しました: ${error.message}`);
+                    console.error("Import Error:", error);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+
+        // --- 汎用ヘルper関数 ---
+
+        function timeToSeconds(timeStr) {
+            const parts = timeStr.split(':').map(Number).reverse();
+            let seconds = 0;
+            if (parts.length > 0) seconds += parts[0];
+            if (parts.length > 1) seconds += parts[1] * 60;
+            return seconds;
+        }
+        
+        function secondsToTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = seconds % 60;
+            return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        }
+
+        function populateSelect(selectId, options) {
+            const select = document.getElementById(selectId);
+            if (!select) return; 
+            
+            select.innerHTML = '<option value="">-- 選択 --</option>';
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option.en;
+                opt.textContent = `${option.en} (${option.jp})`;
+                select.appendChild(opt);
+            });
+        }
+        
+        function getOptionList(type) {
+             return STATIC_OPTIONS[type].options.map(opt => opt.en);
+        }
+
+
+        // --- 基本設定/キャラ管理 ---
+
+        function renderGeneralSettingsModal() {
+            // モーダル内のセレクトボックスを初期化
+            populateSelect('default-color-select', STATIC_OPTIONS.color.options);
+            populateSelect('default-camera-select', STATIC_OPTIONS.camera.options);
+            populateSelect('default-location-select', STATIC_OPTIONS.location.options);
+            populateSelect('default-sound-select', STATIC_OPTIONS.sound.options);
+
+            // 基本設定UIの値を設定
+            document.getElementById('project-name').value = state.generalSettings.projectName;
+            document.getElementById('total-video-duration').value = state.generalSettings.totalDuration;
+            document.getElementById('aspect-ratio').value = state.generalSettings.aspectRatio;
+            
+            // 自由入力とリスト選択の値をセット
+            const checkAndSet = (type) => {
+                const setting = state.generalSettings[`default${type.charAt(0).toUpperCase() + type.slice(1)}`];
+                const list = getOptionList(type);
+
+                document.getElementById(`default-${type}-input`).value = list.includes(setting) ? '' : setting;
+                document.getElementById(`default-${type}-select`).value = list.includes(setting) ? setting : '';
+            };
+
+            checkAndSet('color');
+            checkAndSet('camera');
+            checkAndSet('location');
+            checkAndSet('sound');
+            
+            renderProjectCharactersList();
+        }
+        
+        function renderProjectCharactersList() {
+            const listContainer = document.getElementById('project-characters-list');
+            listContainer.innerHTML = '';
+            
+            if (state.generalSettings.projectCharacters.length === 0) {
+                listContainer.innerHTML = '<p class="text-gray-500 text-sm">プロジェクトに追加されたキャラはいません。</p>';
+                return;
+            }
+            
+            state.generalSettings.projectCharacters.forEach(charId => {
+                const char = allCharacters.find(c => c.id === charId);
+                if (!char) return;
+                
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-gray-700 p-2 rounded';
+                
+                const imageSrc = char.base64Image || `https://placehold.co/80x80/4a4a4a/ffffff?text=${char.name.charAt(0)}`;
+                
+                div.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <img src="${imageSrc}" alt="${char.name}" class="w-6 h-6 object-cover rounded-full">
+                        <span class="text-sm">${char.name}</span>
+                    </div>
+                    <button onclick="removeCharacterFromProject(${charId})" class="text-red-400 hover:text-red-300 text-xs">削除</button>
+                `;
+                listContainer.appendChild(div);
+            });
+        }
+        
+        function openCharacterSelectionModal() {
+            const list = document.getElementById('available-characters-list');
+            list.innerHTML = '';
+            
+            allCharacters.forEach(char => {
+                const isUsed = state.generalSettings.projectCharacters.includes(char.id);
+                const div = document.createElement('div');
+                div.className = 'bg-gray-700 p-3 flex space-x-3 items-center rounded cursor-pointer justify-between';
+                
+                const imageSrc = char.base64Image || `https://placehold.co/80x80/4a4a4a/ffffff?text=${char.name.charAt(0)}`;
+
+                div.innerHTML = `
+                    <div class="flex items-center space-x-2 flex-grow">
+                        <img src="${imageSrc}" alt="${char.name}" class="w-10 h-10 object-cover rounded-full">
+                        <label for="char-select-${char.id}" class="cursor-pointer flex-grow font-semibold">${char.name}</label>
+                    </div>
+                    <input type="checkbox" id="char-select-${char.id}" data-char-id="${char.id}" ${isUsed ? 'checked' : ''} onchange="toggleCharacterInProject(this.dataset.charId, this.checked)" class="rounded bg-gray-600 border-gray-500 text-blue-600 focus:ring-blue-500">
+                `;
+                list.appendChild(div);
+            });
+            openModal('character-selection-modal');
+        }
+        
+        function toggleCharacterInProject(charId, isChecked) {
+            const id = parseInt(charId);
+            const list = state.generalSettings.projectCharacters;
+            
+            if (isChecked && !list.includes(id)) {
+                list.push(id);
+            } else if (!isChecked && list.includes(id)) {
+                state.generalSettings.projectCharacters = list.filter(c => c !== id);
+            }
+            saveAll();
+            renderProjectCharactersList();
+            renderAll();
+        }
+        
+        function removeCharacterFromProject(charId) {
+            if (!confirm('このキャラをプロジェクトから削除しますか？\n（シーン内の配置データも削除されます）')) return;
+            
+            const id = parseInt(charId);
+            state.generalSettings.projectCharacters = state.generalSettings.projectCharacters.filter(c => c !== id);
+            
+            state.scenes.forEach(scene => {
+                scene.sketchData.characters = scene.sketchData.characters.filter(c => c.id !== id);
+            });
+            
+            saveAll();
+            renderProjectCharactersList();
+            renderAll();
+        }
+
+        function updateGeneralSetting(shouldRender = true) {
+            const gs = state.generalSettings;
+            
+            // プロジェクト名変更時の ID/キー管理は不要になりました。
+            // IDは不変であり、キーは ID に基づいています。
+
+            gs.projectName = document.getElementById('project-name').value || '無題のプロジェクト';
+            gs.totalDuration = parseInt(document.getElementById('total-video-duration').value) || 10;
+            gs.aspectRatio = document.getElementById('aspect-ratio').value;
+            
+            const getSetting = (type) => {
+                const select = document.getElementById(`default-${type}-select`).value;
+                const input = document.getElementById(`default-${type}-input`).value.trim();
+                return input || select;
+            };
+
+            gs.defaultColor = getSetting('color');
+            gs.defaultCamera = getSetting('camera');
+            gs.defaultLocation = getSetting('location');
+            gs.defaultSound = getSetting('sound');
+
+            saveAll();
+            
+            if (shouldRender) {
+                setupCanvasListeners(); 
+                recalculateSceneTimes();
+                renderAll();
+            } else {
+                 updateHeaderProjectName();
+            }
+        }
+        
+        function renderCharacterModal() {
+            const list = document.getElementById('character-list-modal');
+            list.innerHTML = '';
+            allCharacters.forEach((char, index) => {
+                const imageSrc = char.base64Image || `https://placehold.co/80x80/4a4a4a/ffffff?text=${char.name.charAt(0)}`;
+                
+                const div = document.createElement('div');
+                div.className = 'bg-gray-700 p-3 flex space-x-3 items-start rounded';
+                div.innerHTML = `
+                    <div class="flex-shrink-0 w-20">
+                        <input type="file" id="char-file-input-${index}" accept="image/*" class="hidden" onchange="handleFileSelect(event, ${index})">
+                        <div class="image-drop-area"
+                             ondragover="event.preventDefault(); this.style.borderColor='#58a6ff';" 
+                             ondragleave="this.style.borderColor='#4a4a4a';"
+                             ondrop="handleImageDrop(event, ${index})"
+                             onclick="document.getElementById('char-file-input-${index}').click()">
+                            <span class="text-xs text-gray-400 ${char.base64Image ? 'hidden' : ''}" id="drop-text-${index}">ドラッグ & ドロップ or クリック</span>
+                            ${char.base64Image ? `<img src="${imageSrc}" class="image-preview" alt="Preview">` : ''}
+                        </div>
+                        ${char.base64Image ? `<button onclick="removeCharacterImage(${index})" class="text-red-400 hover:text-red-300 text-xs mt-1 w-full">画像削除</button>` : ''}
+                    </div>
+                    <div class="flex-grow">
+                        <input type="text" value="${char.name}" oninput="updateCharacter(${index}, 'name', this.value)" placeholder="名前" class="w-full p-1 bg-gray-800 border-b border-gray-600 rounded text-white text-sm mb-1">
+                        <textarea rows="3" oninput="updateCharacter(${index}, 'description', this.value)" placeholder="説明文" class="w-full p-1 bg-gray-800 border-b border-gray-600 rounded text-gray-300 text-xs">${char.description}</textarea>
+                    </div>
+                    <button onclick="removeCharacter(${index})" class="text-red-400 hover:text-red-300 text-sm flex-shrink-0">削除</button>
+                `;
+                list.appendChild(div);
+            });
+            saveAll();
+        }
+        
+        function handleFileSelect(event, index) {
+            event.preventDefault();
+            const file = event.target.files[0];
+            processImageFile(file, index);
+        }
+
+        function handleImageDrop(event, index) {
+            event.preventDefault();
+            event.target.style.borderColor='#4a4a4a'; // ボーダーをリセット
+            const file = event.dataTransfer.files[0];
+            processImageFile(file, index);
+        }
+
+        function processImageFile(file, index) {
+            if (!file || !file.type.startsWith('image/')) {
+                alert('画像ファイルをドロップまたは選択してください。');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                allCharacters[index].base64Image = e.target.result;
+                renderCharacterModal(); // プレビュー更新のために再レンダリング
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeCharacterImage(index) {
+             allCharacters[index].base64Image = null;
+             renderCharacterModal();
+        }
+
+        function addCharacter() {
+            allCharacters.push({
+                id: Date.now(),
+                name: '新しいキャラ',
+                base64Image: null,
+                description: ''
+            });
+            renderCharacterModal();
+        }
+
+        function updateCharacter(index, key, value) {
+            allCharacters[index][key] = value;
+            saveAll(); 
+            // 名前が変更された場合は、プレースホルダーテキストが変わる可能性があるため、モーダルを再レンダリング
+            if (key === 'name') {
+                 renderCharacterModal();
+            }
+        }
+
+        function removeCharacter(index) {
+            const charId = allCharacters[index].id;
+            allCharacters.splice(index, 1);
+            
+            state.generalSettings.projectCharacters = state.generalSettings.projectCharacters.filter(id => id !== charId);
+            state.scenes.forEach(scene => {
+                scene.sketchData.characters = scene.sketchData.characters.filter(c => c.id !== charId);
+            });
+            
+            saveAll();
+            renderCharacterModal();
+        }
+
+        // --- シーン/タイムライン管理 ---
+        
+        function renderTimeline() {
+            const container = document.getElementById('timeline-track-container');
+            
+            const totalDuration = state.generalSettings.totalDuration;
+            let accumulatedDuration = 0;
+
+            let timelineItemsHTML = '';
+            
+            state.scenes.forEach((scene, index) => {
+                const durationSeconds = scene.duration;
+                const nextTime = accumulatedDuration + durationSeconds;
+                
+                if (durationSeconds <= 0) return;
+
+                timelineItemsHTML += `
+                    <div id="scene-item-${scene.id}" 
+                         data-scene-id="${scene.id}"
+                         draggable="true" 
+                         class="timeline-item ${scene.id === state.activeSceneId ? 'active' : ''}" 
+                         onclick="selectScene(${scene.id})"
+                         ondragstart="handleDragStart(event)"
+                         ondragenter="handleDragEnter(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleDrop(event)"
+                         ondragend="handleDragEnd(event)"
+                         ondragover="handleDragOver(event)">
+                        <div style="height: auto; position: relative;">
+                            <div class="w-full rounded-md p-2 flex flex-col justify-center">
+                                <span class="text-white font-semibold">${scene.name}</span>
+                                <span class="text-xs text-gray-300">${scene.timeStart} ~ ${scene.timeEnd} (${scene.duration}秒)</span>
+                                <span class="text-xs text-gray-400 mt-1 truncate">${scene.promptDescription}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                accumulatedDuration = nextTime;
+            });
+            
+            container.innerHTML = timelineItemsHTML;
+            
+            // 総時間表示を更新 (フッターのみを更新)
+            const currentTotalTime = state.scenes.reduce((sum, scene) => sum + scene.duration, 0);
+            const totalDurationDisplay = document.getElementById('total-duration-display');
+            if(totalDurationDisplay) {
+                totalDurationDisplay.textContent = `合計 ${secondsToTime(currentTotalTime)}`;
+                totalDurationDisplay.classList.toggle('total-time-exceeded', currentTotalTime > totalDuration);
+            }
+        }
+        
+        // --- ドラッグ＆ドロップロジック ---
+        
+        function getClosestSceneItem(el) {
+            return el.closest('.timeline-item');
+        }
+
+        function handleDragStart(e) {
+            // グローバル変数 dragSourceEl を使用
+            dragSourceEl = getClosestSceneItem(e.target);
+            if (!dragSourceEl) return;
+            
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', dragSourceEl.dataset.sceneId); 
+            
+            setTimeout(() => {
+                dragSourceEl.classList.add('dragging');
+            }, 0);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault(); 
+            e.dataTransfer.dropEffect = 'move';
+            
+            const targetEl = getClosestSceneItem(e.target);
+            // グローバル変数 dragSourceEl を使用
+            if (!dragSourceEl || !targetEl || targetEl === dragSourceEl) {
+                return;
+            }
+
+            const rect = targetEl.getBoundingClientRect();
+            const offsetY = e.clientY - rect.top;
+            
+            document.querySelectorAll('.timeline-item').forEach(item => {
+                item.style.borderTop = ''; 
+                item.style.borderBottom = '';
+            });
+
+            if (offsetY < rect.height / 2) {
+                targetEl.style.borderTop = '2px solid #58a6ff';
+            } else {
+                targetEl.style.borderBottom = '2px solid #58a6ff';
+            }
+        }
+        
+        function handleDragEnter(e) {
+            e.preventDefault();
+        }
+
+        function handleDragLeave(e) {
+            const targetEl = getClosestSceneItem(e.target);
+             if (targetEl) {
+                if (!targetEl.contains(e.relatedTarget) && dragSourceEl !== targetEl) {
+                    targetEl.style.borderTop = '';
+                    targetEl.style.borderBottom = '';
+                }
+            }
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            const targetEl = getClosestSceneItem(e.target);
+            // dragSourceEl はグローバル変数
+            
+            if (!dragSourceEl || !targetEl || targetEl === dragSourceEl) {
+                document.querySelectorAll('.timeline-item').forEach(item => {
+                    item.style.borderTop = '';
+                    item.style.borderBottom = '';
+                });
+                return;
+            }
+            
+            const sourceId = parseInt(e.dataTransfer.getData('text/plain'));
+            const targetId = parseInt(targetEl.dataset.sceneId);
+            
+            const sourceIndex = state.scenes.findIndex(s => s.id === sourceId);
+            const targetIndex = state.scenes.findIndex(s => s.id === targetId);
+
+            if (sourceIndex === -1 || targetIndex === -1) return;
+            
+            const rect = targetEl.getBoundingClientRect();
+            const offsetY = e.clientY - rect.top;
+            
+            let newIndex = targetIndex;
+            if (offsetY > rect.height / 2) {
+                newIndex = targetIndex + 1;
+            }
+
+            if (sourceIndex < newIndex) {
+                newIndex--; 
+            }
+            
+            const [movedScene] = state.scenes.splice(sourceIndex, 1);
+            state.scenes.splice(newIndex, 0, movedScene);
+
+            saveAll();
+            renderAll(); 
+
+            document.querySelectorAll('.timeline-item').forEach(item => {
+                item.style.borderTop = '';
+                item.style.borderBottom = '';
+            });
+        }
+        
+        function handleDragEnd(e) {
+            if (dragSourceEl) {
+                dragSourceEl.classList.remove('dragging');
+                // ドラッグ終了時にグローバル変数 dragSourceEl をリセット
+                dragSourceEl = null; 
+            }
+             document.querySelectorAll('.timeline-item').forEach(item => {
+                item.style.borderTop = '';
+                item.style.borderBottom = '';
+            });
+        }
+
+        // --- タイム再計算 ---
+
+        function recalculateSceneTimes() {
+            let currentTime = 0;
+            const maxTime = state.generalSettings.totalDuration; // stateから正しく取得
+
+            state.scenes.forEach((scene, index) => {
+                scene.name = `シーン ${index + 1}`;
+                scene.timeStart = secondsToTime(currentTime);
+                
+                currentTime += scene.duration;
+                scene.timeEnd = secondsToTime(currentTime);
+            });
+            
+            state.scenes = state.scenes.filter(s => s.duration > 0);
+            
+            const currentTotalTime = state.scenes.reduce((sum, scene) => sum + scene.duration, 0);
+
+            const totalDurationDisplay = document.getElementById('total-duration-display');
+            if(totalDurationDisplay) {
+                totalDurationDisplay.textContent = `合計 ${secondsToTime(currentTotalTime)}`;
+                totalDurationDisplay.classList.toggle('total-time-exceeded', currentTotalTime > maxTime);
+            }
+            
+            renderTimeline();
+        }
+
+        function addScene() {
+            const lastScene = state.scenes[state.scenes.length - 1];
+            
+            let newDuration = 3; 
+            let newStartTime = 0;
+
+            if (lastScene) {
+                newStartTime = timeToSeconds(lastScene.timeEnd);
+            }
+            
+            const newScene = {
+                id: Date.now(),
+                name: '新しいシーン',
+                duration: newDuration,
+                timeStart: secondsToTime(newStartTime),
+                timeEnd: secondsToTime(newStartTime + newDuration),
+                color: { setting: 'Inherit', inherit: true },
+                camera: { setting: '', inherit: true },
+                location: { setting: '', inherit: true },
+                sound: { setting: '', inherit: true },
+                promptDescription: '',
+                sketchData: { handDrawn: '', characters: [] }
+            };
+            
+            state.scenes.push(newScene);
+            
+            saveAll();
+            renderAll();
+            selectScene(newScene.id);
+        }
+
+        function moveScene(direction) {
+            const activeId = state.activeSceneId;
+            const index = state.scenes.findIndex(s => s.id === activeId);
+            if (index === -1) return;
+
+            const newIndex = index + direction;
+
+            if (newIndex >= 0 && newIndex < state.scenes.length) {
+                const [movedScene] = state.scenes.splice(index, 1);
+                state.scenes.splice(newIndex, 0, movedScene);
+                saveAll();
+                renderAll();
+            }
+        }
+        
+        function copyScene() {
+            const activeId = state.activeSceneId;
+            const index = state.scenes.findIndex(s => s.id === activeId);
+            if (index === -1) return;
+
+            const original = state.scenes[index];
+            const newStartTime = timeToSeconds(original.timeEnd);
+            
+            const copiedScene = JSON.parse(JSON.stringify(original));
+            copiedScene.id = Date.now();
+            copiedScene.duration = original.duration;
+            copiedScene.timeStart = secondsToTime(newStartTime);
+            copiedScene.timeEnd = secondsToTime(newStartTime + original.duration);
+            copiedScene.name = `コピー ${original.name}`;
+
+            state.scenes.splice(index + 1, 0, copiedScene);
+            
+            saveAll();
+            renderAll();
+            selectScene(copiedScene.id);
+        }
+
+        function deleteScene() {
+            const activeId = state.activeSceneId;
+            const index = state.scenes.findIndex(s => s.id === activeId);
+            if (index === -1 || !confirm('このシーンを削除しますか？')) return;
+
+            state.scenes.splice(index, 1);
+            
+            if (state.scenes.length > 0) {
+                 const newActiveScene = state.scenes[Math.min(index, state.scenes.length - 1)];
+                 state.activeSceneId = newActiveScene.id;
+            } else {
+                 state.activeSceneId = null;
+            }
+
+            saveAll();
+            renderAll();
+            if (state.scenes.length === 0) renderSceneEditor();
+        }
+
+
+        function renderHistoryList() {
+             const list = document.getElementById('history-list');
+            list.innerHTML = `<h3 class="text-xs text-gray-500 mb-1">プロジェクト履歴</h3>`;
+            projectHistory.sort((a, b) => b.lastModified - a.lastModified);
+            
+            projectHistory.forEach(project => {
+                // プロジェクト ID を使用して比較
+                const isCurrent = project.projectId === state.generalSettings.projectId;
+                const item = document.createElement('div');
+                item.className = 'history-project-item relative flex justify-between items-center'; 
+                
+                item.onclick = (e) => {
+                    if (e.target.closest('.project-menu-btn')) return;
+                    loadProject(project.projectId);
+                };
+                
+                item.innerHTML = `
+                    <span class="${isCurrent ? 'font-bold text-[#58a6ff]' : ''}" 
+                          style="cursor: pointer; max-width: calc(100% - 35px); overflow: hidden; white-space: nowrap; flex-grow: 1; padding: 5px 0;">
+                        ${project.name}
+                    </span>
+                    <button class="project-menu-btn text-gray-400 hover:text-white" onclick="toggleProjectMenu(event, '${project.projectId}')">
+                        ︙
+                    </button>
+                    <div id="menu-${project.projectId}" class="project-menu" style="display: none;">
+                        <button onclick="duplicateProject('${project.projectId}')" class="text-sm hover:bg-gray-600">コピー</button>
+                        <button onclick="deleteProject('${project.projectId}')" class="text-sm text-red-400 hover:bg-gray-600">削除</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+
+            list.style.display = isSidebarExpanded ? 'block' : 'none';
+        }
+        
+        function toggleProjectMenu(event, projectId) {
+            event.stopPropagation();
+            
+            document.querySelectorAll('.project-menu').forEach(menu => {
+                if (menu.id !== `menu-${projectId}`) {
+                    menu.style.display = 'none';
+                }
+            });
+            
+            const menu = document.getElementById(`menu-${projectId}`);
+            if (menu) {
+                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            }
+        }
+
+
+        // --- シーン編集 ---
+        
+        function renderSceneEditor() {
+            const container = document.getElementById('scene-editor-container');
+            const sketchArea = document.getElementById('sketch-area');
+            const activeScene = state.scenes.find(s => s.id === state.activeSceneId);
+
+            if (!activeScene) {
+                container.innerHTML = `
+                    <div class="text-center p-12 text-gray-400">
+                        <h3 class="text-xl mb-4">シーンがありません。</h3>
+                        <p>「シーン追加」ボタンを押して、最初のシーンを作成してください。</p>
+                    </div>
+                `;
+                sketchArea.classList.add('hidden');
+                return;
+            }
+
+            container.innerHTML = createSceneEditorHTML(activeScene);
+            sketchArea.classList.remove('hidden');
+            
+            document.getElementById('scene-duration-slider').value = activeScene.duration;
+            document.getElementById('scene-duration-input').value = activeScene.duration;
+            document.getElementById('scene-time-display').textContent = `${activeScene.timeStart} ~ ${activeScene.timeEnd}`;
+            
+            toggleSceneInput('color', activeScene);
+            toggleSceneInput('camera', activeScene);
+            toggleSceneInput('location', activeScene);
+            toggleSceneInput('sound', activeScene);
+            
+            // チェックボックスの状態を currentSketchMode に合わせる
+            const drawCheckbox = document.getElementById('mode-draw-checkbox');
+            if (drawCheckbox) {
+                drawCheckbox.checked = currentSketchMode === 'draw';
+            }
+
+            loadSketch(activeScene);
+            updateSketchModeButtons(currentSketchMode); // モードボタンの状態を反映
+        }
+
+        function updateSceneDuration(newDuration) {
+            const scene = state.scenes.find(s => s.id === state.activeSceneId);
+            if (!scene) return;
+
+            newDuration = parseInt(newDuration);
+            if (newDuration < 1 || isNaN(newDuration)) {
+                newDuration = 1;
+            }
+
+            scene.duration = newDuration;
+            document.getElementById('scene-duration-slider').value = newDuration;
+            document.getElementById('scene-duration-input').value = newDuration;
+
+            recalculateSceneTimes();
+        }
+
+        function updateSceneField(type, isInherit) {
+            const scene = state.scenes.find(s => s.id === state.activeSceneId);
+            if (!scene) return;
+
+            scene[type].inherit = isInherit;
+            if (!isInherit) {
+                const select = document.getElementById(`scene-${type}-select`).value;
+                const input = document.getElementById(`scene-${type}-input`).value.trim();
+                scene[type].setting = input || select;
+            } else {
+                scene[type].setting = 'Inherit';
+            }
+            
+            toggleSceneInput(type, scene);
+        }
+        
+        function updateScenePrompt(value) {
+            const scene = state.scenes.find(s => s.id === state.activeSceneId);
+            if (!scene) return;
+            scene.promptDescription = value.trim();
+        }
+
+        function createSceneEditorHTML(scene) {
+            const maxDuration = state.generalSettings.totalDuration;
+            const getOptionHTML = (type, scene) => {
+                const options = STATIC_OPTIONS[type].options;
+                
+                return options.map(opt => {
+                    const isSelected = scene[type].setting === opt.en && !scene[type].inherit;
+                    return `<option value="${opt.en}" ${isSelected ? 'selected' : ''}>${opt.en} (${opt.jp})</option>`;
+                }).join('');
+            };
+
+            const getCustomValue = (type, scene) => {
+                const setting = scene[type].setting;
+                const list = getOptionList(type);
+                return list.includes(setting) || scene[type].inherit || setting === 'Inherit' || setting === '' ? '' : setting;
+            };
+
+
+            return `
+                <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                    <h2 id="editing-scene-title" class="text-2xl font-semibold text-[#58a6ff]">${scene.name}</h2>
+                    <div class="flex space-x-2">
+                        <button onclick="moveScene(-1)" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">▲</button>
+                        <button onclick="moveScene(1)" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">▼</button>
+                        <button onclick="copyScene()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">コピー</button>
+                        <button onclick="deleteScene()" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm">削除</button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4 flex-shrink-0">
+                    <div class="col-span-1">
+                        <label class="block text-sm font-medium mb-1">時間 (秒)</label>
+                        <input type="range" id="scene-duration-slider" min="1" max="${maxDuration}" value="${scene.duration}" oninput="updateSceneDuration(this.value)" class="w-full">
+                    </div>
+                    <div class="col-span-1 flex items-center space-x-2">
+                        <input type="number" id="scene-duration-input" min="1" max="${maxDuration}" value="${scene.duration}" onchange="updateSceneDuration(this.value)" class="slider-box w-1/3 text-center">
+                        <span class="text-sm">(秒)</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 overflow-y-auto pr-2 flex-grow">
+                    <!-- カラー -->
+                    <div class="input-group">
+                        <label class="block text-sm font-medium mb-1">カラー（コンセプト）</label>
+                        <div class="flex items-center space-x-2 mb-1">
+                            <input type="checkbox" id="scene-color-inherit" onchange="updateSceneField('color', this.checked);" class="rounded bg-gray-700 border-gray-600" ${scene.color.inherit ? 'checked' : ''}>
+                            <label for="scene-color-inherit" class="text-sm">引き継ぐ</label>
+                        </div>
+                        <select id="scene-color-select" class="w-full p-2" onchange="updateSceneField('color', false)">
+                            <option value="">-- 選択 --</option>
+                            ${getOptionHTML('color', scene)}
+                        </select>
+                         <input type="text" id="scene-color-input" placeholder="自由入力" class="w-full mt-1" oninput="updateSceneField('color', false)" value="${getCustomValue('color', scene)}">
+                    </div>
+                    <!-- カメラ -->
+                    <div class="input-group">
+                        <label class="block text-sm font-medium mb-1">カメラ</label>
+                        <div class="flex items-center space-x-2 mb-1">
+                            <input type="checkbox" id="scene-camera-inherit" onchange="updateSceneField('camera', this.checked);" class="rounded bg-gray-700 border-gray-600" ${scene.camera.inherit ? 'checked' : ''}>
+                            <label for="scene-camera-inherit" class="text-sm">引き継ぐ</label>
+                        </div>
+                        <select id="scene-camera-select" class="w-full p-2" onchange="updateSceneField('camera', false)">
+                            <option value="">-- 選択 --</option>
+                            ${getOptionHTML('camera', scene)}
+                        </select>
+                         <input type="text" id="scene-camera-input" placeholder="自由入力" class="w-full mt-1" oninput="updateSceneField('camera', false)" value="${getCustomValue('camera', scene)}">
+                    </div>
+                    <!-- 場所 -->
+                    <div class="input-group">
+                        <label class="block text-sm font-medium mb-1">場所 (背景、風景)</label>
+                        <div class="flex items-center space-x-2 mb-1">
+                            <input type="checkbox" id="scene-location-inherit" onchange="updateSceneField('location', this.checked);" class="rounded bg-gray-700 border-gray-600" ${scene.location.inherit ? 'checked' : ''}>
+                            <label for="scene-location-inherit" class="text-sm">引き継ぐ</label>
+                        </div>
+                        <select id="scene-location-select" class="w-full p-2" onchange="updateSceneField('location', false)">
+                            <option value="">-- 選択 --</option>
+                            ${getOptionHTML('location', scene)}
+                        </select>
+                         <input type="text" id="scene-location-input" placeholder="自由入力" class="w-full mt-1" oninput="updateSceneField('location', false)" value="${getCustomValue('location', scene)}">
+                    </div>
+                    <!-- サウンド -->
+                    <div class="input-group">
+                        <label class="block text-sm font-medium mb-1">サウンド (BGM, 環境音)</label>
+                        <div class="flex items-center space-x-2 mb-1">
+                            <input type="checkbox" id="scene-sound-inherit" onchange="updateSceneField('sound', this.checked);" class="rounded bg-gray-700 border-gray-600" ${scene.sound.inherit ? 'checked' : ''}>
+                            <label for="scene-sound-inherit" class="text-sm">引き継ぐ</label>
+                        </div>
+                        <select id="scene-sound-select" class="w-full p-2" onchange="updateSceneField('sound', false)">
+                            <option value="">-- 選択 --</option>
+                            ${getOptionHTML('sound', scene)}
+                        </select>
+                         <input type="text" id="scene-sound-input" placeholder="自由入力" class="w-full mt-1" oninput="updateSceneField('sound', false)" value="${getCustomValue('sound', scene)}">
+                    </div>
+                    
+                    <div class="input-group mt-4 col-span-2">
+                        <label for="scene-prompt" class="block text-sm font-medium mb-1">シーン説明プロンプト (状況、動き、セリフ)</label>
+                        <textarea id="scene-prompt" rows="5" placeholder="自由入力" class="w-full p-2" oninput="updateScenePrompt(this.value);">${scene.promptDescription}</textarea>
+                    </div>
+                </div>
+                <!-- 保存ボタンは下部に固定 -->
+                <button onclick="saveScene(true)" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mt-4 flex-shrink-0">シーン内容を保存</button>
+            `;
+        }
+
+        function selectScene(id, saveAndRender = true) {
+            const scene = state.scenes.find(s => s.id === id);
+            if (!scene) return;
+            
+            state.activeSceneId = id;
+            
+            renderSceneEditor();
+            
+            if (saveAndRender) {
+                renderTimeline();
+                saveAll();
+            }
+        }
+        
+        function toggleSceneInput(type, scene = state.scenes.find(s => s.id === state.activeSceneId)) {
+            if (!scene) return;
+            
+            const inheritChecked = document.getElementById(`scene-${type}-inherit`).checked;
+            const selectEl = document.getElementById(`scene-${type}-select`);
+            const inputEl = document.getElementById(`scene-${type}-input`);
+            
+            if (!selectEl || !inputEl) return;
+
+            selectEl.disabled = inheritChecked;
+            inputEl.disabled = inheritChecked;
+            
+            if (inheritChecked) {
+                selectEl.value = '';
+                inputEl.value = '';
+            } else if (!getOptionList(type).includes(scene[type].setting) && scene[type].setting !== 'Inherit' && scene[type].setting !== '') {
+                 inputEl.value = scene[type].setting;
+                 selectEl.value = '';
+            } else {
+                 selectEl.value = scene[type].setting === 'Inherit' ? '' : scene[type].setting;
+                 inputEl.value = '';
+            }
+        }
+        
+        function saveScene(shouldRender = true) {
+            const scene = state.scenes.find(s => s.id === state.activeSceneId);
+            if (!scene) return;
+            
+            if(canvas) {
+                scene.sketchData.handDrawn = canvas.toDataURL(); 
+            }
+            
+            scene.sketchData.characters = Array.from(document.getElementById('character-placement-area').children)
+                .map(el => ({
+                    id: parseInt(el.dataset.charId),
+                    name: el.textContent,
+                    x: parseFloat(el.style.left) || 0,
+                    y: parseFloat(el.style.top) || 0,
+                }));
+            
+            saveAll();
+            if (shouldRender) {
+                renderAll();
+            } else {
+                loadSketch(scene); 
+            }
+        }
+
+        // --- Canvasスケッチ機能 ---
+        
+        function adjustCanvasSize() {
+            const aspectRatio = state.generalSettings.aspectRatio;
+            const container = document.getElementById('sketch-container');
+            
+            let ratio;
+            if (aspectRatio === '9:16_vertical') {
+                ratio = 9 / 16;
+                canvasWidth = 400;
+                canvasHeight = 711;
+            } else {
+                ratio = 16 / 9;
+                canvasWidth = 711;
+                canvasHeight = 400;
+            }
+
+            container.style.paddingTop = `calc(100% / ${ratio})`;
+            
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+
+            loadSketch();
+        }
+
+        function setupCanvasListeners() {
+            
+            window.removeEventListener('resize', adjustCanvasSize);
+            window.addEventListener('resize', adjustCanvasSize); 
+
+            adjustCanvasSize();
+            
+            // Canvas listeners (手書き用)
+            canvas.removeEventListener('mousedown', startDrawing);
+            canvas.removeEventListener('mousemove', draw);
+            canvas.removeEventListener('mouseup', stopDrawing);
+            canvas.removeEventListener('mouseout', stopDrawing);
+            canvas.removeEventListener('touchstart', startDrawing);
+            canvas.removeEventListener('touchmove', draw);
+            canvas.removeEventListener('touchend', stopDrawing);
+
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                startDrawing({ clientX: touch.clientX, clientY: touch.clientY, rect: rect });
+            });
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                draw({ clientX: touch.clientX, clientY: touch.clientY, rect: rect });
+            });
+            canvas.addEventListener('touchend', stopDrawing);
+            
+            const placementArea = document.getElementById('character-placement-area');
+            
+            placementArea.removeEventListener('mousedown', startDrag);
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+            placementArea.removeEventListener('touchstart', startDrag);
+            document.removeEventListener('touchmove', drag);
+            document.removeEventListener('touchend', stopDrag);
+            
+            // キャラクター配置エリアにイベントをバインド
+            placementArea.addEventListener('mousedown', startDrag);
+            document.addEventListener('mousemove', drag); 
+            document.addEventListener('mouseup', stopDrag);
+
+            placementArea.addEventListener('touchstart', (e) => {
+                const charEl = e.target.closest('.drag-char');
+                if (charEl) {
+                    e.preventDefault();
+                    startDrag({ target: charEl, clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, touches: e.touches });
+                }
+            });
+            document.addEventListener('touchmove', (e) => {
+                if (activeDragChar) {
+                    e.preventDefault();
+                    drag({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, touches: e.touches });
+                }
+            });
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function drawAspectBorder(aspectRatio) {
+            ctx.strokeStyle = '#238636';
+            ctx.lineWidth = 4;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        function loadSketch(sceneToLoad) {
+            const scene = sceneToLoad || state.scenes.find(s => s.id === state.activeSceneId);
+
+            drawAspectBorder(state.generalSettings.aspectRatio);
+            
+            if (scene?.sketchData?.handDrawn) {
+                const img = new Image();
+                img.onload = () => ctx.drawImage(img, 0, 0);
+                img.src = scene.sketchData.handDrawn; // 手書きデータを描画
+            }
+            
+            const placementArea = document.getElementById('character-placement-area');
+            placementArea.innerHTML = '';
+            
+            if (scene) {
+                scene.sketchData.characters.forEach(char => {
+                    const charData = allCharacters.find(c => c.id == char.id);
+                    if (!charData) return;
+                    
+                    const div = document.createElement('div');
+                    div.className = 'drag-char';
+                    div.textContent = charData.name;
+                    div.dataset.charId = char.id;
+                    div.style.left = `${char.x}px`;
+                    div.style.top = `${char.y}px`;
+                    placementArea.appendChild(div);
+                });
+                
+                document.getElementById('sketch-prompt-overlay').textContent = scene.promptDescription;
+                document.getElementById('scene-time-display').textContent = `${scene.timeStart} ~ ${scene.timeEnd}`;
+            } else {
+                 document.getElementById('sketch-prompt-overlay').textContent = 'シーンを追加してください';
+                 document.getElementById('scene-time-display').textContent = '00:00';
+            }
+            
+            // スケッチモードを再設定
+            updateSketchModeButtons(currentSketchMode);
+        }
+
+        function clearSketch() {
+            if (!confirm('スケッチ（手書きとキャラ配置）をクリアしますか？')) return;
+            
+            const scene = state.scenes.find(s => s.id === state.activeSceneId);
+            if (scene) {
+                scene.sketchData.handDrawn = '';
+                scene.sketchData.characters = [];
+            }
+            drawAspectBorder(state.generalSettings.aspectRatio);
+            document.getElementById('character-placement-area').innerHTML = '';
+            saveScene();
+        }
+
+        function startDrawing(e) {
+            if (e.target.closest('.drag-char')) return;
+            if (currentSketchMode !== 'draw') return; // 手書きモードでなければ描画しない
+            isDrawing = true;
+            
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+            
+            if (clientX === undefined) return;
+            
+            [lastX, lastY] = [
+                (clientX - rect.left) * (canvas.width / rect.width),
+                (clientY - rect.top) * (canvas.height / rect.height)
+            ];
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+        }
+
+        function draw(e) {
+            if (!isDrawing || currentSketchMode !== 'draw') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+            
+            if (clientX === undefined) return;
+
+            const offsetX = (clientX - rect.left) * (canvas.width / rect.width);
+            const offsetY = (clientY - rect.top) * (canvas.height / rect.height);
+            
+            ctx.lineTo(offsetX, offsetY);
+            ctx.strokeStyle = '#f0f0f0';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            [lastX, lastY] = [offsetX, offsetY];
+        }
+
+        function stopDrawing() {
+            if (isDrawing && currentSketchMode === 'draw') {
+                isDrawing = false;
+                saveScene(true); 
+            }
+        }
+        
+        function updateSketchModeButtons(mode) {
+            const drawCheckbox = document.getElementById('mode-draw-checkbox');
+            const drawLabel = drawCheckbox.closest('label');
+
+            if (mode === 'draw') {
+                drawCheckbox.checked = true;
+                drawLabel.classList.add('mode-button-active');
+                
+                // Canvasがイベントを受け取り、カーソルを描画モードに
+                document.getElementById('character-placement-area').style.pointerEvents = 'none'; 
+                document.getElementById('drawing-canvas').style.pointerEvents = 'auto'; 
+                document.getElementById('drawing-canvas').style.cursor = 'crosshair';
+            } else if (mode === 'char') {
+                drawCheckbox.checked = false;
+                drawLabel.classList.remove('mode-button-active');
+                
+                // Char Areaがイベントを受け取り、カーソルをデフォルトに
+                document.getElementById('character-placement-area').style.pointerEvents = 'auto'; 
+                document.getElementById('drawing-canvas').style.pointerEvents = 'none'; 
+                document.getElementById('drawing-canvas').style.cursor = 'default';
+            }
+            currentSketchMode = mode;
+        }
+
+        function setSketchMode(mode) {
+             const actualMode = (typeof mode === 'boolean') ? (mode ? 'draw' : 'char') : mode;
+             updateSketchModeButtons(actualMode);
+        }
+        
+        // キャラクター追加モーダル (新規配置ではなく、プロジェクトへの追加用)
+        function openCharacterPlacementModal() {
+            // モードを維持し、モーダルを開く
+            const list = document.getElementById('placement-character-list');
+            list.innerHTML = '';
+            
+            const availableChars = allCharacters.filter(c => state.generalSettings.projectCharacters.includes(c.id));
+            
+            if (availableChars.length === 0) {
+                 list.innerHTML = '<p class="text-gray-500 text-sm">基本設定からプロジェクトにキャラを追加してください。</p>';
+            }
+
+            availableChars.forEach(char => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-700 hover:bg-gray-600 p-3 flex space-x-3 items-center rounded cursor-pointer';
+                
+                const imageSrc = char.base64Image || `https://placehold.co/40x40/4a4a4a/ffffff?text=${char.name.charAt(0)}`;
+
+                div.innerHTML = `
+                    <img src="${imageSrc}" alt="${char.name}" class="w-10 h-10 object-cover rounded-full">
+                    <span class="font-semibold">${char.name}</span>
+                `;
+                // モーダルを閉じ、Canvasの中央にキャラを追加する
+                div.onclick = () => {
+                    addCharacterToCanvas(char);
+                    setSketchMode('char'); // 配置したらドラッグモードに切り替え
+                };
+                list.appendChild(div);
+            });
+            
+            openModal('character-placement-modal');
+        }
+        
+        function addCharacterToCanvas(char) {
+            closeModal('character-placement-modal');
+            const scene = state.scenes.find(s => s.id === state.activeSceneId);
+            if (!scene) return;
+
+            const existingChar = scene.sketchData.characters.find(c => c.id === char.id);
+            if (existingChar) {
+                alert(`「${char.name}」はすでに配置されています。`); 
+                return;
+            }
+
+            const newChar = {
+                id: char.id,
+                name: char.name,
+                x: canvasWidth / 2 - 20,
+                y: canvasHeight / 2 - 20,
+            };
+            
+            scene.sketchData.characters.push(newChar);
+            
+            saveAll();
+            loadSketch(scene);
+        }
+
+        let offsetX, offsetY;
+        
+        function startDrag(e) {
+            const charEl = e.target.closest('.drag-char');
+            if (!charEl || currentSketchMode !== 'char') return;
+            
+            activeDragChar = charEl;
+            
+            if (e.type.startsWith('mouse')) e.preventDefault();
+            
+            const canvasRect = canvas.getBoundingClientRect();
+            const wrapper = document.getElementById('sketch-wrapper');
+            
+            // マウス/タッチ座標
+            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+
+            if (clientX === undefined) return;
+
+            // Canvas PIXEL 座標への変換に必要なスケールファクター
+            const scaleX = canvas.width / canvasRect.width;
+            const scaleY = canvas.height / canvasRect.height;
+            
+            // ドラッグ要素の現在の位置 (Canvas PIXEL)
+            const charLeft = parseFloat(charEl.style.left) || 0;
+            const charTop = parseFloat(charEl.style.top) || 0;
+            
+            // マウスカーソル位置を Canvas PIXEL 座標に変換 (スクロールとスケールを正確に補正)
+            const pointerX_canvas = (clientX - canvasRect.left + wrapper.scrollLeft) * scaleX;
+            const pointerY_canvas = (clientY - canvasRect.top + wrapper.scrollTop) * scaleY;
+
+
+            // オフセット = カーソル位置(Canvas PIXEL) - キャラクター位置(Canvas PIXEL)
+            offsetX = pointerX_canvas - charLeft;
+            offsetY = pointerY_canvas - charTop;
+
+            activeDragChar.style.cursor = 'grabbing';
+        }
+
+        function drag(e) {
+            if (!activeDragChar || currentSketchMode !== 'char') return;
+
+            const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+            const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+
+            if (clientX === undefined) return;
+
+            const canvasRect = canvas.getBoundingClientRect();
+            const wrapper = document.getElementById('sketch-wrapper');
+
+            const scaleX = canvas.width / canvasRect.width;
+            const scaleY = canvas.height / canvasRect.height;
+            
+            // マウスカーソル位置を Canvas ピクセル座標に変換
+            const pointerX_canvas = (clientX - canvasRect.left + wrapper.scrollLeft) * scaleX;
+            const pointerY_canvas = (clientY - canvasRect.top + wrapper.scrollTop) * scaleY;
+
+            // 新しいキャラ位置 (Canvas PIXEL) = カーソル位置(Canvas PIXEL) - オフセット
+            let newX_canvas = pointerX_canvas - offsetX;
+            let newY_canvas = pointerY_canvas - offsetY;
+            
+            
+            // キャラクター要素のDOMサイズを Canvas スケールで取得 (おおよそのサイズで計算)
+            // ActiveDragCharのサイズをそのままDOMピクセルとして使用し、Canvasスケールで変換
+            const charRect = activeDragChar.getBoundingClientRect();
+            const charW_canvas = charRect.width * scaleX;
+            const charH_canvas = charRect.height * scaleY;
+
+
+            // 境界チェック (Canvas内部のピクセル座標でチェック)
+            newX_canvas = Math.max(0, Math.min(newX_canvas, canvas.width - charW_canvas));
+            newY_canvas = Math.max(0, Math.min(newY_canvas, canvas.height - charH_canvas));
+            
+            // DOM要素のスタイルは、Canvas内部ピクセル値をそのまま使用
+            activeDragChar.style.left = `${newX_canvas}px`;
+            activeDragChar.style.top = `${newY_canvas}px`;
+        }
+
+        function stopDrag() {
+            if (activeDragChar && currentSketchMode === 'char') {
+                activeDragChar.style.cursor = 'grab';
+                activeDragChar = null;
+                saveScene(true);
+            }
+        }
+        
+        // --- 参照用画像ドロップ処理の追加 ---
+        function handleReferenceImageDrop(e) {
+            e.preventDefault();
+            const canvasRef = document.getElementById('reference-image-canvas');
+            canvasRef.classList.remove('drag-over');
+
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.type.startsWith('image/')) {
+                alert('画像ファイルをドロップしてください。');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                state.generalSettings.referenceImage = e.target.result; // Base64として保存
+                saveAll();
+                drawReferenceImage();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // --- プロンプト/画像生成 (保存用フルデータ) ---
+        
+        function generatePromptJson() {
+            const gs = state.generalSettings;
+            
+            const processedScenes = state.scenes.map((scene, index) => {
+                const previousScene = index > 0 ? state.scenes[index - 1] : null;
+
+                const resolveSetting = (type, defaultValue) => {
+                    if (scene[type].inherit || scene[type].setting === 'Inherit' || scene[type].setting === '') {
+                        if (previousScene) {
+                            return previousScene[type].setting;
+                        } else {
+                            return defaultValue; 
+                        }
+                    }
+                    return scene[type].setting;
+                };
+                
+                const finalColor = resolveSetting('color', gs.defaultColor);
+                const finalCamera = resolveSetting('camera', gs.defaultCamera);
+                const finalLocation = resolveSetting('location', gs.defaultLocation);
+                const finalSound = resolveSetting('sound', gs.defaultSound);
+
+                let mainPrompt = '';
+                if (finalColor && finalColor !== 'Inherit') mainPrompt += `${finalColor}, `;
+                if (finalCamera && finalCamera !== 'Inherit') mainPrompt += `${finalCamera}, `;
+                if (finalLocation && finalLocation !== 'Inherit') mainPrompt += `${finalLocation}, `;
+                mainPrompt += scene.promptDescription;
+                if (finalSound && finalSound !== 'Inherit') mainPrompt += `. Sound: ${finalSound}.`;
+                
+                const characterNotes = scene.sketchData.characters.map(c => {
+                    const charData = allCharacters.find(a => a.id == c.id);
+                    const percentW = (state.generalSettings.aspectRatio === '9:16_vertical') ? 400 : 711;
+                    const percentH = (state.generalSettings.aspectRatio === '9:16_vertical') ? 711 : 400;
+
+                    const percentX = Math.round((c.x / percentW) * 100);
+                    const percentY = Math.round((c.y / percentH) * 100);
+                    return `${charData ? charData.name : 'Unknown Character'} positioned near X:${percentX}%, Y:${percentY}%`;
+                }).join('; ');
+
+
+                return {
+                    scene_name: scene.name,
+                    time_start: scene.timeStart,
+                    duration_sec: scene.duration,
+                    prompt: mainPrompt.trim(),
+                    metadata: {
+                        color: finalColor,
+                        camera: finalCamera,
+                        location: finalLocation,
+                        sound: finalSound,
+                        sketch_notes: characterNotes,
+                    }
+                };
+            });
+            
+            const promptData = {
+                project_name: gs.projectName,
+                total_duration_sec: gs.totalDuration,
+                settings: {
+                    aspect_ratio: gs.aspectRatio,
+                    default_color: gs.defaultColor,
+                    default_camera: gs.defaultCamera,
+                    default_location: gs.defaultLocation,
+                    default_sound: gs.defaultSound,
+                },
+                characters: allCharacters.map(c => ({ name: c.name, description: c.description, id: c.id, base64Image: c.base64Image ? '...' : null })),
+                scenes: processedScenes
+            };
+
+            return JSON.stringify(promptData, null, 2);
+        }
+
+        // --- プロンプト/画像生成 (AI向けデータ - 不要なメタデータを削除) ---
+        function generateAIPromptJson() {
+            const gs = state.generalSettings;
+            
+            const processedCharacters = allCharacters
+                .filter(c => state.generalSettings.projectCharacters.includes(c.id)) // 使用キャラのみ
+                .map(c => ({ 
+                    id: c.id, 
+                    name: c.name, 
+                    description: c.description,
+                    // base64Image は AI 向けには不要なため除外
+                }));
+
+
+            const processedScenes = state.scenes.map((scene, index) => {
+                const previousScene = index > 0 ? state.scenes[index - 1] : null;
+
+                const resolveSetting = (type, defaultValue) => {
+                    if (scene[type].inherit || scene[type].setting === 'Inherit' || scene[type].setting === '') {
+                        if (previousScene) {
+                            return previousScene[type].setting;
+                        } else {
+                            return defaultValue; 
+                        }
+                    }
+                    return scene[type].setting;
+                };
+                
+                const finalColor = resolveSetting('color', gs.defaultColor);
+                const finalCamera = resolveSetting('camera', gs.defaultCamera);
+                const finalLocation = resolveSetting('location', gs.defaultLocation);
+                const finalSound = resolveSetting('sound', gs.defaultSound);
+                
+                // メインプロンプトの構成ロジックは generatePromptJson と同じ
+                let mainPrompt = '';
+                if (finalColor && finalColor !== 'Inherit') mainPrompt += `${finalColor}, `;
+                if (finalCamera && finalCamera !== 'Inherit') mainPrompt += `${finalCamera}, `;
+                if (finalLocation && finalLocation !== 'Inherit') mainPrompt += `${finalLocation}, `;
+                mainPrompt += scene.promptDescription;
+                if (finalSound && finalSound !== 'Inherit') mainPrompt += `. Sound: ${finalSound}.`;
+
+
+                return {
+                    // time_start, duration_sec は残す
+                    time_start: scene.timeStart,
+                    duration_sec: scene.duration,
+                    prompt: mainPrompt.trim(),
+                    metadata: {
+                        color: finalColor,
+                        camera: finalCamera,
+                        location: finalLocation,
+                        sound: finalSound,
+                        // sketch_notes は削除
+                    }
+                };
+            });
+            
+            const promptData = {
+                // project_name, total_duration_sec, settings (default_x, aspect_ratio) は削除
+                characters: processedCharacters,
+                scenes: processedScenes
+            };
+
+            return JSON.stringify(promptData, null, 2);
+        }
+        
+        function updateOutput() {
+            // AI 向けのクリーンな JSON を表示
+            const jsonOutput = generateAIPromptJson(); 
+            document.getElementById('prompt-output').value = jsonOutput;
+            drawReferenceImage();
+        }
+
+        function copyOutput() {
+            const output = document.getElementById('prompt-output');
+            output.select();
+            document.execCommand('copy');
+            
+            const copyBtn = document.querySelector('#prompt-modal button[onclick="copyOutput()"]');
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = 'JSONをコピーしました！';
+            setTimeout(() => { copyBtn.textContent = originalText; }, 1500);
+        }
+        
+        // --- 参照用画像機能 ---
+
+        function uploadReferenceImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                state.generalSettings.referenceImage = e.target.result; // Base64として保存
+                saveAll();
+                drawReferenceImage();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function downloadReferenceImage() {
+            const canvasRef = document.getElementById('reference-image-canvas');
+            const dataURL = canvasRef.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = dataURL;
+            a.download = `${state.generalSettings.projectName}_Reference_${new Date().toISOString()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(dataURL);
+        }
+        
+        // --- 画像参照用Canvas描画 (参照画像モード) ---
+        
+        async function drawReferenceImage() {
+            const canvasRef = document.getElementById('reference-image-canvas');
+            const ctxRef = canvasRef.getContext('2d');
+            
+            const ASPECT = state.generalSettings.aspectRatio;
+            
+            // --- 共通定数 ---
+            const PADDING = 20; // セクション内のパディング
+            const TEXT_LINE_HEIGHT = 20;
+            const PADDING_X = 20; 
+            const CHAR_IMG_SIZE = 60;
+            const CHAR_BLOCK_HEIGHT = 100; 
+            const FRAME_LEFT_MARGIN = 100; // 時間表示用の左余白 (横長時)
+            const SCENE_W_UNIT = 180; // 縦長時のフレーム幅 (最小単位)
+            const SCENE_HEIGHT_PER_ROW = 120; // 横長時のシーンブロックの高さ
+            const HEADER_HEIGHT = 30; // セクションタイトルの高さ
+            
+            // プロジェクトで使用されているキャラクターのみを抽出
+            const projectUsedCharacters = allCharacters.filter(c => state.generalSettings.projectCharacters.includes(c.id));
+            
+            // 使用キャラ数に基づいたキャラ設定セクションの基本サイズ
+            const CHAR_SECTION_SIZE_BASE = CHAR_BLOCK_HEIGHT * projectUsedCharacters.length + HEADER_HEIGHT + PADDING * 2;
+            
+            let W, H;
+            let CENTER_FRAME_W, CENTER_FRAME_H;
+            let MAX_SIDE_SIZE = 0; 
+
+            if (ASPECT === '9:16_vertical') {
+                // ----------------------------------------------------
+                // 9:16 縦長時: 横並びレイアウト (ロジック変更なし)
+                // ----------------------------------------------------
+                
+                // 1. 中央フレームのサイズ (9:16)
+                CENTER_FRAME_H = 800;
+                CENTER_FRAME_W = CENTER_FRAME_H * 9 / 16;
+                
+                // 2. 左右セクションの必要幅
+                const SCENE_BLOCK_TOTAL_W = SCENE_W_UNIT + PADDING_X * 2;
+                const LEFT_SIDE_W_REQUIRED = SCENE_BLOCK_TOTAL_W * state.scenes.length; // カット割り全体の幅
+                
+                // キャラセクションの幅は、カット割りセクションの単位幅に依存しない最小幅とする
+                const CHAR_SECTION_W_REQUIRED = 300; 
+
+                // 3. 左右で大きい幅を確定し、その幅を両セクションに適用
+                MAX_SIDE_SIZE = Math.max(LEFT_SIDE_W_REQUIRED, CHAR_SECTION_W_REQUIRED); 
+                
+                const LEFT_SIDE_W = MAX_SIDE_SIZE;
+                const RIGHT_SIDE_W = MAX_SIDE_SIZE;
+
+                // 4. 全体幅: (左側) + (中央フレーム) + (右側)
+                W = LEFT_SIDE_W + CENTER_FRAME_W + RIGHT_SIDE_W; 
+                
+                // 5. 全体高さ
+                H = CENTER_FRAME_H;
+                
+                // Canvas属性をセット
+                canvasRef.setAttribute('width', W);
+                canvasRef.setAttribute('height', H);
+
+                
+                let currentX = 0; 
+                
+                // --- A. 左側: カット割り ---
+                // 中央揃えのためのオフセット
+                const SCENE_BLOCK_ACTUAL_W = SCENE_BLOCK_TOTAL_W * state.scenes.length;
+                const SCENE_OFFSET_X = (LEFT_SIDE_W - SCENE_BLOCK_ACTUAL_W) / 2;
+
+                currentX += SCENE_OFFSET_X > 0 ? SCENE_OFFSET_X : 0;
+
+                for (const scene of state.scenes) {
+                    const sceneW = SCENE_BLOCK_TOTAL_W;
+                    
+                    // 背景
+                    ctxRef.fillStyle = '#212121';
+                    ctxRef.fillRect(currentX, 0, sceneW, H); 
+                    ctxRef.strokeStyle = '#333';
+                    ctxRef.lineWidth = 1;
+                    ctxRef.strokeRect(currentX, 0, sceneW, H);
+                    
+                    const FRAME_W = SCENE_W_UNIT;
+                    const FRAME_H = FRAME_W * (16 / 9); // 縦長モードだが、フレームは横長比率で描画
+                    const FRAME_X = currentX + PADDING_X; 
+                    const FRAME_Y = (H / 2) - (FRAME_H / 2); 
+                    
+                    // フレーム描画
+                    ctxRef.strokeStyle = '#238636';
+                    ctxRef.lineWidth = 4;
+                    ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
+                    ctxRef.fillStyle = '#111';
+                    ctxRef.fillRect(FRAME_X + 2, FRAME_Y + 2, FRAME_W - 4, FRAME_H - 4);
+                    
+                    // 手書き画像を反映
+                    if (scene.sketchData.handDrawn) {
+                         await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
+                    }
+
+                    // テキスト描画 (時間)
+                    ctxRef.font = 'bold 20px "Noto Sans JP", sans-serif';
+                    ctxRef.fillStyle = '#238636';
+                    ctxRef.textAlign = 'left';
+                    ctxRef.fillText(scene.timeStart, currentX + PADDING_X, 30);
+                    
+                    ctxRef.font = '12px "Noto Sans JP", sans-serif';
+                    ctxRef.fillStyle = '#f0f0f0';
+                    let lineY = FRAME_Y + FRAME_H + 20; 
+                    wrapText(ctxRef, scene.promptDescription, currentX + PADDING_X, lineY, sceneW - PADDING_X * 2, TEXT_LINE_HEIGHT);
+
+                    await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
+                    currentX += sceneW;
+                }
+                
+                // 左側セクションの最終描画位置を更新
+                currentX = LEFT_SIDE_W;
+
+                // --- B. 中央: AI認識用フレーム ---
+                const CENTER_X = currentX; 
+                ctxRef.clearRect(CENTER_X, 0, CENTER_FRAME_W, CENTER_FRAME_H); 
+                await drawReferenceImageContent(ctxRef, CENTER_X, 0, CENTER_FRAME_W, CENTER_FRAME_H);
+
+                currentX = CENTER_X + CENTER_FRAME_W;
+
+
+                // --- C. 右側: キャラクター設定 ---
+                const CHAR_X = currentX;
+                const CHAR_W = RIGHT_SIDE_W; 
+                
+                ctxRef.fillStyle = '#2b2b2b';
+                ctxRef.fillRect(CHAR_X, 0, CHAR_W, H); 
+                
+                ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#238636';
+                ctxRef.textAlign = 'left';
+                ctxRef.fillText('キャラ設定', CHAR_X + PADDING_X, PADDING + 10);
+                
+                // キャラセクションを領域の中央付近に配置
+                const CHAR_SECTION_Y_START = (H / 2) - (CHAR_SECTION_SIZE_BASE / 2); 
+                await drawCharacterSection(ctxRef, projectUsedCharacters, CHAR_X, CHAR_SECTION_Y_START, CHAR_W, CHAR_SECTION_SIZE_BASE);
+                
+            } else { 
+                // ----------------------------------------------------
+                // 16:9 横長時: 縦積みレイアウト (修正ロジック)
+                // ----------------------------------------------------
+                
+                // 1. 中央フレームのサイズ (16:9)
+                CENTER_FRAME_W = 1000;
+                CENTER_FRAME_H = CENTER_FRAME_W * 9 / 16;
+                
+                W = CENTER_FRAME_W; 
+                
+                // 2. 上下セクションの必要高さ
+                const SCENE_CUT_TOTAL_H_REQUIRED = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
+                MAX_SIDE_SIZE = Math.max(SCENE_CUT_TOTAL_H_REQUIRED, CHAR_SECTION_SIZE_BASE);
+
+                let SCENE_BLOCK_H_TOTAL = MAX_SIDE_SIZE; 
+                
+                let currentY = 0; 
+
+                // 4. 全体高さの確定
+                H = SCENE_BLOCK_H_TOTAL + CENTER_FRAME_H + SCENE_BLOCK_H_TOTAL;
+                canvasRef.setAttribute('width', W);
+                canvasRef.setAttribute('height', H);
+
+
+                // --- A. 上部: カット割り (縦1列配置) ---
+                const SCENE_BLOCK_Y = currentY;
+                const SCENE_CUT_ACTUAL_H = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
+                const SCENE_Y_OFFSET = (SCENE_BLOCK_H_TOTAL - SCENE_CUT_ACTUAL_H) / 2; // 中央揃えオフセット
+                
+                ctxRef.fillStyle = '#212121';
+                ctxRef.fillRect(0, SCENE_BLOCK_Y, W, SCENE_BLOCK_H_TOTAL);
+                
+                ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#238636';
+                ctxRef.textAlign = 'left';
+                ctxRef.fillText('カット割り（横長）', PADDING_X, SCENE_BLOCK_Y + PADDING + 10);
+
+                // シーンを縦1列に並べて描画
+                state.scenes.forEach(async (scene, index) => {
+                    
+                    const blockY = SCENE_BLOCK_Y + SCENE_Y_OFFSET + PADDING + HEADER_HEIGHT + (index * SCENE_HEIGHT_PER_ROW);
+                    
+                    const TIME_W = FRAME_LEFT_MARGIN - PADDING_X;
+                    const FRAME_X = PADDING_X + FRAME_LEFT_MARGIN;
+                    
+                    // 1. フレームの計算 (16:9比率を保ち、行の高さ SCENE_HEIGHT_PER_ROW に収まるようにする)
+                    const FRAME_PADDING = 10;
+                    const FRAME_H = SCENE_HEIGHT_PER_ROW - (FRAME_PADDING * 2); // 100px
+                    const FRAME_W_TARGET = FRAME_H * (16 / 9); // 16:9比率
+                    
+                    const FRAME_Y = blockY + FRAME_PADDING; // 上部からのパディング 10px
+
+                    // 2. プロンプト領域の計算
+                    const PROMPT_X = FRAME_X + FRAME_W_TARGET + 15; // フレームの右から15pxのスペース
+                    const PROMPT_W = W - PROMPT_X - PADDING_X; 
+                    
+                    // 3. 時間表示 (左側に配置)
+                    ctxRef.font = 'bold 14px "Noto Sans JP", sans-serif';
+                    ctxRef.fillStyle = '#c9d1d9';
+                    ctxRef.textAlign = 'right';
+                    // 垂直中央に配置
+                    ctxRef.fillText(scene.timeStart, FRAME_LEFT_MARGIN - 5, FRAME_Y + FRAME_H / 2 + 5);
+                    
+                    // 4. フレーム（16:9）
+                    ctxRef.strokeStyle = '#238636';
+                    ctxRef.lineWidth = 4;
+                    ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
+                    ctxRef.fillStyle = '#111';
+                    ctxRef.fillRect(FRAME_X + 2, FRAME_Y + 2, FRAME_W_TARGET - 4, FRAME_H - 4);
+                    
+                    // 手書き画像を反映
+                    if (scene.sketchData.handDrawn) {
+                         await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
+                    }
+
+                    // 5. シーン説明プロンプト（フレームの右側に配置）
+                    ctxRef.fillStyle = '#f0f0f0';
+                    ctxRef.font = '12px "Noto Sans JP", sans-serif';
+                    ctxRef.textAlign = 'left';
+                    
+                    // テキストの描画開始Y座標: フレームの上端から15px下
+                    const PROMPT_START_Y = FRAME_Y + 15;
+
+                    wrapText(ctxRef, scene.promptDescription, PROMPT_X, PROMPT_START_Y, PROMPT_W, 15);
+
+                    // 6. キャラクター配置の反映
+                    await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
+                });
+                
+                currentY += SCENE_BLOCK_H_TOTAL;
+
+                // --- B. 中央: AI認識用フレーム（中央認識領域）---
+                const CENTER_Y = currentY;
+                const CENTER_X = (W - CENTER_FRAME_W) / 2; 
+
+                ctxRef.clearRect(0, CENTER_Y, W, CENTER_FRAME_H);
+                await drawReferenceImageContent(ctxRef, CENTER_X, CENTER_Y, CENTER_FRAME_W, CENTER_FRAME_H);
+
+                currentY += CENTER_FRAME_H;
+
+                // --- C. 下部: キャラクター設定 ---
+                const CHAR_BLOCK_Y = currentY;
+                const CHAR_Y_OFFSET = (SCENE_BLOCK_H_TOTAL - CHAR_SECTION_SIZE_BASE) / 2;
+
+                ctxRef.fillStyle = '#2b2b2b';
+                ctxRef.fillRect(0, CHAR_BLOCK_Y, W, SCENE_BLOCK_H_TOTAL); 
+                
+                ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#238636';
+                ctxRef.textAlign = 'left';
+                ctxRef.fillText('キャラ設定', PADDING_X, CHAR_BLOCK_Y + PADDING + 10);
+                
+                await drawCharacterSection(ctxRef, projectUsedCharacters, 0, CHAR_BLOCK_Y + CHAR_Y_OFFSET + PADDING + 30, W, CHAR_SECTION_SIZE_BASE);
+            }
+        }
+        
+        // **追加関数**: 手書き画像を Canvas に描画する
+        async function drawHandDrawnSketch(ctxRef, base64Data, targetX, targetY, targetW, targetH) {
+             const img = new Image();
+             img.crossOrigin = "anonymous";
+             img.src = base64Data;
+
+             await new Promise(resolve => {
+                 img.onload = () => {
+                     // スケッチキャンバスのサイズ (400x711 or 711x400) を想定
+                     const sourceW = img.width;
+                     const sourceH = img.height;
+                     
+                     // ターゲットフレームに合わせて描画
+                     ctxRef.drawImage(img, targetX, targetY, targetW, targetH);
+                     resolve();
+                 };
+                 img.onerror = resolve; // ロード失敗時はスキップ
+             });
+        }
+
+        function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            let lineY = y;
+            
+            for(let n = 0; n < words.length; n++) {
+                let testLine = line + words[n] + ' ';
+                if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, lineY);
+                    line = words[n] + ' ';
+                    lineY += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, lineY);
+        }
+
+        async function drawReferenceImageContent(ctxRef, x, y, w, h) {
+            const refImage = state.generalSettings.referenceImage;
+            
+            if (refImage) {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.src = refImage;
+
+                await new Promise(resolve => {
+                    img.onload = () => {
+                        const scale = Math.min(w / img.width, h / img.height);
+                        const drawW = img.width * scale;
+                        const drawH = img.height * scale;
+                        const drawX = x + (w - drawW) / 2;
+                        const drawY = y + (h - drawH) / 2;
+                        
+                        ctxRef.drawImage(img, drawX, drawY, drawW, drawH);
+                        resolve();
+                    };
+                    img.onerror = () => {
+                        ctxRef.fillStyle = '#444';
+                        ctxRef.fillRect(x, y, w, h);
+                        ctxRef.font = '24px "Noto Sans JP", sans-serif';
+                        ctxRef.fillStyle = '#aaa';
+                        ctxRef.textAlign = 'center';
+                        ctxRef.fillText('画像読込エラー', x + w / 2, y + h / 2);
+                        resolve();
+                    };
+                });
+            } else {
+                // 画像未読み込み時のテキスト描画を削除し、背景を塗りつぶすのみ
+                ctxRef.fillStyle = '#444'; // 背景を薄い灰色で塗りつぶす
+                ctxRef.fillRect(x, y, w, h);
+            }
+        }
+
+        async function drawCharactersInSketch(ctxRef, characters, frameX, frameY, frameW, frameH) {
+             const baseW = (state.generalSettings.aspectRatio === '9:16_vertical') ? 400 : 711;
+             const baseH = (state.generalSettings.aspectRatio === '9:16_vertical') ? 711 : 400;
+
+             ctxRef.font = 'bold 16px "Noto Sans JP", sans-serif';
+             ctxRef.fillStyle = '#fff';
+             ctxRef.textAlign = 'left';
+             
+             for (const char of characters) {
+                 const charData = allCharacters.find(a => a.id == char.id);
+                 if (!charData) continue;
+
+                 const scaleX = frameW / baseW;
+                 const scaleY = frameH / baseH;
+                 
+                 const drawX = frameX + char.x * scaleX;
+                 const drawY = frameY + char.y * scaleY;
+
+                 ctxRef.fillText(charData.name, drawX, drawY);
+             }
+        }
+
+
+        async function drawCharacterSection(ctxRef, characters, startX, startY, totalW, totalH) {
+            let charY = startY;
+            const CHAR_IMG_SIZE = 60;
+            const TEXT_OFFSET = 80;
+            const CHAR_BLOCK_HEIGHT = 100; 
+            const PADDING_X = 20;
+
+            for (const char of characters) {
+                if (charY > startY + totalH - CHAR_BLOCK_HEIGHT) break; 
+
+                const base64Image = char.base64Image;
+                
+                if (base64Image) {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.src = base64Image;
+
+                    await new Promise(resolve => {
+                        img.onload = () => {
+                            ctxRef.drawImage(img, startX + PADDING_X, charY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            // 画像読込失敗時のプレースホルダー
+                            ctxRef.fillStyle = '#f00';
+                            ctxRef.fillRect(startX + PADDING_X, charY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
+                            ctxRef.font = '10px "Noto Sans JP", sans-serif';
+                            ctxRef.fillStyle = '#fff';
+                            ctxRef.textAlign = 'center';
+                            ctxRef.fillText('Error', startX + PADDING_X + CHAR_IMG_SIZE / 2, charY + CHAR_IMG_SIZE / 2 + 3);
+                            resolve();
+                        };
+                    });
+                } else {
+                    // 画像未登録時のプレースホルダー
+                    ctxRef.fillStyle = '#30363d';
+                    ctxRef.fillRect(startX + PADDING_X, charY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
+                    ctxRef.font = '12px "Noto Sans JP", sans-serif';
+                    ctxRef.fillStyle = '#c9d1d9';
+                    ctxRef.textAlign = 'center';
+                    ctxRef.fillText(char.name.charAt(0), startX + PADDING_X + CHAR_IMG_SIZE / 2, charY + CHAR_IMG_SIZE / 2 + 4);
+                }
+
+                ctxRef.font = 'bold 18px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#fff';
+                ctxRef.textAlign = 'left';
+                ctxRef.fillText(char.name, startX + TEXT_OFFSET + PADDING_X, charY + 20);
+                
+                ctxRef.font = '14px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#c9d1d9';
+                
+                const descriptionText = char.description;
+                const DESC_MAX_WIDTH = totalW - TEXT_OFFSET - (PADDING_X * 2);
+                let descLineY = charY + 45;
+                
+                wrapText(ctxRef, descriptionText, startX + TEXT_OFFSET + PADDING_X, descLineY, DESC_MAX_WIDTH, 18);
+
+                charY += CHAR_BLOCK_HEIGHT;
+            }
+        }
+
+
+        // --- 初期ロード ---
+        
+        function initializeUI() {
+            loadAll(); 
+            
+            canvas = document.getElementById('drawing-canvas');
+            ctx = canvas.getContext('2d');
+            setupCanvasListeners();
+
+            renderAll();
+            
+            if (state.scenes.length > 0 && !state.activeSceneId) {
+                selectScene(state.scenes[0].id);
+            } else {
+                renderSceneEditor();
+            }
+            
+            // モーダル閉鎖時にポインターイベントをリセット (領域外クリック)
+            document.querySelectorAll('.modal-overlay').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        closeModal(modal.id);
+                    }
+                });
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.project-menu-btn')) {
+                    document.querySelectorAll('.project-menu').forEach(menu => menu.style.display = 'none');
+                }
+            });
+
+            const sidebar = document.getElementById('sidebar');
+            if (!isSidebarExpanded) {
+                 sidebar.classList.remove('expanded');
+                 document.getElementById('menu-toggle-text').textContent = 'メニューを固定';
+            }
+            document.getElementById('history-list').style.display = isSidebarExpanded ? 'block' : 'none';
+            
+            // 初期化後、手書きモードに設定
+            setSketchMode('draw');
+        }
+
+        window.onload = initializeUI;
+    </script>
+</body>
+</html>

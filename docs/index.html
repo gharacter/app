@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta http-equiv="content-language" content="ja">
+
+<meta property="og:url" content="https://gharacter.github.io/app/" />
+<meta property="og:image" content="https://gharacter.github.io/app/res/title.png" />
+<meta property="og:title" content="GharacterApp" />
+<meta property="og:description" content="ウェブアプリを置いていく" />
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@gharacter" />
+
+<meta property="og:site_name" content="サイト名" />
+<meta property="og:locale" content="ja_JP" />
+<meta property="fb:app_id" content="appIDを入力">
+
+<style>
+*,
+*::before,
+*::after   { margin:0; padding:0; box-sizing:border-box; }
+body, html { width:100%; height:100%; background:#333; color:#FFF; overflow:hidden hidden; }
+a     { color:#FC0; }
+a:visited { color:#C90; }
+i, em { font-style:normal; }
+b     { font-weight:normal; }
+br    { height:0px; }
+ul    { list-style:none; }
+ol    { margin-left:40px; }
+li    { padding:0.4em; }
+h2    { margin-top:1.2em; }
+input { vertical-align:middle; }
+textarea { vertical-align:top; background:#bbb; color:#000; padding:0.4em; }
+img, video, canvas { vertical-align:bottom; -ms-interpolation-mode:bicubic; }/*IEが汚い-ms-…はIE9以降無効(絶望)*/
+
+#main { width:100%; height:100%; }
+#top  { width:100%; height:44px; position:fixed; left:0px; top:0px; background:rgba(0,0,0,0.5);line-height:44px; text-align:center; z-index:2; }
+#mdl  { width:100%; height:calc(100% - 44px); position:absolute; left:0; top:44px; overflow:auto; }
+#btm  { width:100%; height:44px; position:fixed; left:0px; bottom:0px; background:rgba(0,0,0,0.0); z-index:2; overflow:hidden; pointer-events:none; }
+#btm *{ pointer-events:auto; }
+
+.nav       { cursor:pointer; margin:0 8px; }
+.nav input { display:none; }
+.nav input:checked + b { font-weight:bold; line-height:1.2em; border-bottom:2px solid #FC0; }
+
+.page      { max-width:800px; margin:auto; display:none; }
+.content   { padding:5px; }
+.image     { padding:20px; text-align:center; }
+.image img { width:50%; }
+
+#disp1     { max-width:auto; height:100%; }
+.swf       { display:inline-block; vertical-align:bottom; }
+
+.dropArea { min-height:80px; text-align:center; padding:4px 4px; border:dashed 1px #888; border-radius:8px; background:#000; overflow:hidden; }
+.dropAreaInput { display:inline-block; }
+.inputFileData { width:100%; }
+.inputFileData tt { width:100%; margin-top:5px; text-align:left; padding:10px; border-radius:8px; background:#666; color:#FFF; display:block; }
+
+.config { display:inline-block; float:right; text-align:left; white-space:nowrap; background:#222; border:solid 0px #ccc; border-radius:8px; }
+.config label { margin:5px; padding:2px 5px; background:#eee; color:#333; border:solid 1px #ccc; border-radius:20px; }
+.config input[type='text'],
+.config input[type='number'],
+.config textarea { width:100%; border-radius:3px; padding:5px 5px; }
+</style>
+<title></title>
+</head>
+<body>
+<div id="main">
+	<div id="top">
+		<label class="nav"><input type="radio" name="nav" value=0><b>概要・設定</b>
+		</label><label class="nav"><input type="radio" name="nav" value=1><b>再生</b>
+		</label>
+
+		<span class="dropArea">
+			<input type="file" class="inputFile" name="file">
+		</span>
+	</div>
+	<div id="mdl">
+		<div class="page">
+			<div class="content">
+				<h1>GharacterApp</h1>
+
+				<p>
+					ウェブアプリを置いていく
+				</p>
+
+
+				<h2>注意事項</h2>
+				<ul>
+					<li></li>
+				</ul>
+
+				<h2>更新日</h2>
+				<ul>
+					<li></li>
+				</ul>
+
+				<h2>書いた人</h2>
+				<p>
+					Ezp!<br>
+					<a href="http://ezp.s17.xrea.com">Gharacter Junktion</a> というサイトでモバイルフラッシュを作って置いてました。(いまはもううごかない)<br>
+					たまに <a href="https://twitter.com/Gharacter">X</a> でなにかしゃべる。
+				</p>
+			</div>
+		</div>
+		<div class="page" id="disp1">
+		</div>
+	</div>
+	<div id="btm">
+	</div>
+</div>
+</body>
+</html>
