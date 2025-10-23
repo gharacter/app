@@ -1017,9 +1017,8 @@
         let startX = 0, startY = 0; 
         let startWidth = 0, startHeight = 0;
         
-        // [修正] Canvasの論理解像度を1920px基準に変更 (9:16の場合)
-        let canvasWidth = 1080; 
-        let canvasHeight = 1920; 
+        let canvasWidth = 400; // 論理幅 (9:16)
+        let canvasHeight = 711; // 論理高さ (9:16)
         let isSidebarExpanded = false; 
         let currentSketchMode = 'draw'; // 'draw' or 'placement'
         
@@ -1475,9 +1474,9 @@
                 timeStart: '00:00', 
                 end: secondsToTime(newDuration),   
                 color: { setting: 'Inherit', inherit: true }, 
-                camera: { setting: '', inherit: true },
-                location: { setting: '', inherit: true },
-                sound: { setting: '', inherit: true },
+                camera: { setting: '', inherit: true }, 
+                location: { setting: '', inherit: true }, 
+                sound: { setting: '', inherit: true }, 
                 promptDescription: '', 
                 sketchData: { handDrawn: '', characters: [], images: [] } 
             }];
@@ -2330,7 +2329,7 @@
             scene[type].inherit = isInherit;
             if (!isInherit) {
                 const select = document.getElementById(`scene-${type}-select`).value;
-                const input = document.getElementById(`scene-${type}-input`).value.trim(); 
+                const input = inputEl.value.trim(); 
                 scene[type].setting = input || select;
             } else {
                 scene[type].setting = 'Inherit';
@@ -2578,15 +2577,14 @@
             if (!container || !wrapper || !sketchArea) return;
 
             let ratio;
-            // [修正] 論理解像度を1920px基準に設定
             if (aspectRatio === '9:16_vertical') {
                 ratio = 9 / 16;
-                canvasWidth = 1080; 
-                canvasHeight = 1920; 
+                canvasWidth = 400; // 論理解像度
+                canvasHeight = 711; // 論理解像度
             } else {
                 ratio = 16 / 9;
-                canvasWidth = 1920; 
-                canvasHeight = 1080; 
+                canvasWidth = 711; // 論理解像度
+                canvasHeight = 400; // 論理解像度
             }
 
             canvas.width = canvasWidth;
@@ -3625,7 +3623,7 @@
             copyBtn.textContent = 'JSONをコピーしました！';
         }
         
-        // --- 参照用画像機能 (高解像度化と横長レイアウト均等化) ---
+        // --- 参照用画像機能 (変更なし) ---
         
         function downloadReferenceImage() {
             const canvasRef = document.getElementById('reference-image-canvas');
@@ -3639,9 +3637,359 @@
             // URL.revokeObjectURL(dataURL); // dataURLはBase64なので revokeObjectURL は不要
         }
         
-        // =========================================================================
-        // [復元と移動] テキスト折り返し関数をここに定義します
-        // =========================================================================
+        async function drawReferenceImage() {
+            const canvasRef = document.getElementById('reference-image-canvas');
+            const ctxRef = canvasRef.getContext('2d');
+            
+            const ASPECT = state.generalSettings.aspectRatio;
+            
+            const PADDING = 20; 
+            const TEXT_LINE_HEIGHT = 20;
+            const PADDING_X = 20; 
+            const CHAR_IMG_SIZE = 60;
+            const FRAME_LEFT_MARGIN = 100; 
+            const SCENE_W_UNIT = 180; 
+            const SCENE_HEIGHT_PER_ROW = 120; 
+            const HEADER_HEIGHT = 30; 
+            
+            const projectUsedCharacters = allCharacters.filter(c => state.generalSettings.projectCharacters.includes(c.id));
+            
+            const DEBUG_BOUNDS = document.getElementById('debug-text-bounds')?.checked || false;
+
+            let W, H;
+            let CENTER_FRAME_W, CENTER_FRAME_H;
+            let MAX_SIDE_SIZE = 0; 
+            
+            if (ASPECT === '9:16_vertical') {
+                CENTER_FRAME_H = 800;
+                CENTER_FRAME_W = CENTER_FRAME_H * 9 / 16;
+                
+                const SCENE_BLOCK_TOTAL_W = SCENE_W_UNIT + PADDING_X * 2;
+                const LEFT_SIDE_W_REQUIRED = SCENE_BLOCK_TOTAL_W * state.scenes.length; 
+                
+                ctxRef.font = 'bold 18px "Noto Sans JP", sans-serif'; 
+                const AVG_CHAR_WIDTH = 12; 
+                const TARGET_TEXT_WIDTH = AVG_CHAR_WIDTH * 20; 
+                const CHAR_COL_MIN_W = CHAR_IMG_SIZE + 20 + TARGET_TEXT_WIDTH + PADDING_X; 
+                const RIGHT_SIDE_W_REQUIRED = CHAR_COL_MIN_W * 2 + PADDING_X; 
+
+                MAX_SIDE_SIZE = Math.max(LEFT_SIDE_W_REQUIRED, RIGHT_SIDE_W_REQUIRED); 
+                
+                const LEFT_SIDE_W = MAX_SIDE_SIZE;
+                const RIGHT_SIDE_W = MAX_SIDE_SIZE;
+                
+                const { requiredHeight: charRequiredH } = await calculateTwoColumnCharacterSectionHeight(
+                    ctxRef, projectUsedCharacters, RIGHT_SIDE_W, PADDING, HEADER_HEIGHT, PADDING_X
+                );
+
+                H = Math.max(CENTER_FRAME_H, charRequiredH);
+                W = LEFT_SIDE_W + CENTER_FRAME_W + RIGHT_SIDE_W; 
+                
+                canvasRef.setAttribute('width', W);
+                canvasRef.setAttribute('height', H);
+
+                
+                let currentX = 0; 
+                
+                const SCENE_BLOCK_ACTUAL_W = SCENE_BLOCK_TOTAL_W * state.scenes.length;
+                const SCENE_OFFSET_X = (LEFT_SIDE_W - SCENE_BLOCK_ACTUAL_W) / 2;
+
+                currentX += SCENE_OFFSET_X > 0 ? SCENE_OFFSET_X : 0;
+
+                for (const scene of state.scenes) {
+                    const sceneW = SCENE_BLOCK_TOTAL_W;
+                    
+                    ctxRef.fillStyle = '#212121';
+                    ctxRef.fillRect(currentX, 0, sceneW, H); 
+                    ctxRef.strokeStyle = '#333';
+                    ctxRef.lineWidth = 1;
+                    ctxRef.strokeRect(currentX, 0, sceneW, H);
+                    
+                    const FRAME_W = SCENE_W_UNIT;
+                    const FRAME_H = FRAME_W * (16 / 9); 
+                    const FRAME_X = currentX + PADDING_X; 
+                    
+                    const HEADER_SPACE = 40; 
+                    const FRAME_Y = HEADER_SPACE; 
+                    
+                    ctxRef.strokeStyle = '#238636';
+                    ctxRef.lineWidth = 4;
+                    ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
+                    ctxRef.fillStyle = '#111';
+                    ctxRef.fillRect(FRAME_X + 2, FRAME_Y + 2, FRAME_W - 4, FRAME_H - 4);
+                    
+                    if (scene.sketchData.images && scene.sketchData.images.length > 0) {
+                         // [修正] drawImagesInSketch の引数を修正
+                         await drawImagesInSketch(ctxRef, scene.sketchData.images, FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
+                    }
+
+                    if (scene.sketchData.handDrawn) {
+                         // [修正] 手書き描画の視認性を向上させる
+                         await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W, FRAME_H, true);
+                    }
+
+                    ctxRef.font = 'bold 20px "Noto Sans JP", sans-serif';
+                    ctxRef.fillStyle = '#f0f0f0'; 
+                    ctxRef.textAlign = 'left';
+                    ctxRef.fillText(scene.timeStart, currentX + PADDING_X, PADDING); 
+                    
+                    ctxRef.font = '12px "Noto Sans JP", sans-serif';
+                    ctxRef.fillStyle = '#f0f0f0';
+                    
+                    const TEXT_START_Y = FRAME_Y + FRAME_H + 20; 
+                    // [修正] テキスト領域の高さをシーンの底まで確保
+                    const TEXT_MAX_HEIGHT = H - TEXT_START_Y - PADDING; 
+                    
+                    const TEXT_AREA_X = currentX + PADDING_X;
+                    const TEXT_AREA_Y = TEXT_START_Y;
+                    const TEXT_AREA_W = sceneW - PADDING_X * 2;
+                    
+                    // [追加] デバッグ用の枠描画
+                    if (DEBUG_BOUNDS) {
+                        ctxRef.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                        ctxRef.lineWidth = 1;
+                        ctxRef.strokeRect(TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_MAX_HEIGHT);
+                    }
+                    
+                    // [修正] wrapText の改行処理を有効化
+                    wrapText(ctxRef, scene.promptDescription, TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_LINE_HEIGHT, TEXT_AREA_Y + TEXT_MAX_HEIGHT);
+
+                    // [修正] キャラクター名の視認性を向上させる
+                    await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W, FRAME_H, true);
+                    currentX += sceneW;
+                }
+                
+                currentX = LEFT_SIDE_W;
+
+                const CENTER_X = currentX; 
+                ctxRef.clearRect(CENTER_X, 0, CENTER_FRAME_W, CENTER_FRAME_H); 
+                await drawReferenceImageContent(ctxRef, CENTER_X, 0, CENTER_FRAME_W, CENTER_FRAME_H);
+
+                currentX = CENTER_X + CENTER_FRAME_W;
+
+
+                const CHAR_X = currentX;
+                const CHAR_W = RIGHT_SIDE_W; 
+                
+                ctxRef.fillStyle = '#2b2b2b';
+                ctxRef.fillRect(CHAR_X, 0, CHAR_W, H); 
+                
+                ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#238636';
+                ctxRef.textAlign = 'left';
+                ctxRef.fillText('キャラ設定', CHAR_X + PADDING_X, PADDING + 10);
+                
+                const CHAR_SECTION_Y_START = PADDING + HEADER_HEIGHT + 10;
+                await drawCharacterSection(ctxRef, projectUsedCharacters, CHAR_X, CHAR_SECTION_Y_START, CHAR_W, H - CHAR_SECTION_Y_START, PADDING, true); 
+                
+            } else { // 16:9_horizontal
+                
+                CENTER_FRAME_W = 1000;
+                CENTER_FRAME_H = CENTER_FRAME_W * 9 / 16;
+                W = CENTER_FRAME_W; 
+                
+                const SCENE_BLOCK_H_TOP_MIN = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
+                
+                const { requiredHeight: charRequiredH } = await calculateCharacterSectionHeight(
+                    ctxRef, projectUsedCharacters, W, PADDING, HEADER_HEIGHT, PADDING_X
+                );
+                
+                let SCENE_BLOCK_H_TOP = SCENE_BLOCK_H_TOP_MIN;
+                let CHAR_SECTION_H = charRequiredH; 
+                
+                H = SCENE_BLOCK_H_TOP + CENTER_FRAME_H + CHAR_SECTION_H;
+                canvasRef.setAttribute('width', W);
+                canvasRef.setAttribute('height', H);
+
+
+                let currentY = 0; 
+                
+                const SCENE_BLOCK_Y = currentY;
+                
+                ctxRef.fillStyle = '#212121';
+                ctxRef.fillRect(0, SCENE_BLOCK_Y, W, SCENE_BLOCK_H_TOP);
+                
+                ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#238636';
+                ctxRef.textAlign = 'left';
+                ctxRef.fillText('カット割り（横長）', PADDING_X, SCENE_BLOCK_Y + PADDING + 10);
+
+                const SCENE_CUT_ACTUAL_H = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
+                const SCENE_Y_OFFSET = (SCENE_BLOCK_H_TOP - SCENE_CUT_ACTUAL_H) / 2;
+                
+                state.scenes.forEach(async (scene, index) => {
+                    
+                    const blockY = SCENE_BLOCK_Y + SCENE_Y_OFFSET + PADDING + HEADER_HEIGHT + (index * SCENE_HEIGHT_PER_ROW);
+                    
+                    const FRAME_X = PADDING_X + FRAME_LEFT_MARGIN;
+                    
+                    const FRAME_PADDING = 10;
+                    const FRAME_H = SCENE_HEIGHT_PER_ROW - (FRAME_PADDING * 2); 
+                    const FRAME_W_TARGET = FRAME_H * (16 / 9); 
+                    
+                    const FRAME_Y = blockY + FRAME_PADDING;
+
+                    const PROMPT_X = FRAME_X + FRAME_W_TARGET + 15;
+                    const PROMPT_W = W - PROMPT_X - PADDING_X; 
+                    
+                    ctxRef.font = 'bold 14px "Noto Sans JP", sans-serif';
+                    ctxRef.fillStyle = '#c9d1d9';
+                    ctxRef.textAlign = 'right';
+                    ctxRef.fillText(scene.timeStart, FRAME_LEFT_MARGIN - 5, FRAME_Y + FRAME_H / 2 + 5);
+                    
+                    ctxRef.strokeStyle = '#238636';
+                    ctxRef.lineWidth = 4;
+                    ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
+                    ctxRef.fillStyle = '#111';
+                    ctxRef.fillRect(FRAME_X + 2, FRAME_Y + 2, FRAME_W_TARGET - 4, FRAME_H - 4);
+                    
+                    if (scene.sketchData.images && scene.sketchData.images.length > 0) {
+                         // [修正] drawImagesInSketch の引数を修正
+                         await drawImagesInSketch(ctxRef, scene.sketchData.images, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
+                    }
+                    
+                    if (scene.sketchData.handDrawn) {
+                         // [修正] 手書き描画の視認性を向上させる
+                         await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H, true);
+                    }
+
+                    ctxRef.fillStyle = '#f0f0f0';
+                    ctxRef.font = '12px "Noto Sans JP", sans-serif';
+                    ctxRef.textAlign = 'left';
+                    
+                    const PROMPT_START_Y = FRAME_Y + 15;
+                    const TEXT_MAX_HEIGHT = FRAME_H - 25; // 描画可能な高さを確保
+
+                    const TEXT_AREA_X = PROMPT_X;
+                    const TEXT_AREA_Y = PROMPT_START_Y;
+                    const TEXT_AREA_W = PROMPT_W;
+                    
+                    // [追加] デバッグ用の枠描画
+                    if (DEBUG_BOUNDS) {
+                        ctxRef.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                        ctxRef.lineWidth = 1;
+                        // [修正] Y座標を調整して描画エリア全体を囲む
+                        ctxRef.strokeRect(TEXT_AREA_X, TEXT_AREA_Y - 15, TEXT_AREA_W, TEXT_MAX_HEIGHT + 10);
+                    }
+
+                    // [修正] wrapText の改行処理を有効化
+                    wrapText(ctxRef, scene.promptDescription, TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, 15, TEXT_MAX_HEIGHT + TEXT_AREA_Y);
+
+                    // [修正] キャラクター名の視認性を向上させる
+                    await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H, true);
+                });
+                
+                currentY += SCENE_BLOCK_H_TOP;
+
+                const CENTER_Y = currentY;
+                const CENTER_X = (W - CENTER_FRAME_W) / 2; 
+
+                ctxRef.clearRect(0, CENTER_Y, W, CENTER_FRAME_H);
+                await drawReferenceImageContent(ctxRef, CENTER_X, CENTER_Y, CENTER_FRAME_W, CENTER_FRAME_H);
+
+                currentY += CENTER_FRAME_H;
+
+                const CHAR_BLOCK_Y = currentY;
+                const CHAR_W = W;
+                
+                ctxRef.fillStyle = '#2b2b2b';
+                ctxRef.fillRect(0, CHAR_BLOCK_Y, CHAR_W, CHAR_SECTION_H); 
+                
+                ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif';
+                ctxRef.fillStyle = '#238636';
+                ctxRef.textAlign = 'left';
+                ctxRef.fillText('キャラ設定', PADDING_X, CHAR_BLOCK_Y + PADDING + 10);
+                
+                const CHAR_SECTION_Y_START = CHAR_BLOCK_Y + PADDING + HEADER_HEIGHT + 10;
+                await drawCharacterSection(ctxRef, projectUsedCharacters, 0, CHAR_SECTION_Y_START, CHAR_W, CHAR_SECTION_H - (PADDING + HEADER_HEIGHT + 10), PADDING, false);
+            }
+        }
+        
+        async function calculateCharacterSectionHeight(ctxRef, characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X) {
+            const CHAR_IMG_SIZE = 60;
+            const TEXT_OFFSET = 80;
+            const LINE_HEIGHT_NAME = 20;
+            const LINE_HEIGHT_DESC = 16;
+            const ITEM_GAP = 15; 
+            
+            const MAX_TEXT_WIDTH = totalW - TEXT_OFFSET - (PADDING_X * 2);
+            
+            let totalHeight = PADDING + HEADER_HEIGHT + 10; 
+
+            for (const char of characters) {
+                ctxRef.font = 'bold 18px "Noto Sans JP", sans-serif'; 
+                const nameLines = calculateTextLines(ctxRef, char.name, MAX_TEXT_WIDTH);
+                const nameHeight = nameLines * LINE_HEIGHT_NAME;
+
+                ctxRef.font = '14px "Noto Sans JP", sans-serif';
+                const descLines = calculateTextLines(ctxRef, char.description, MAX_TEXT_WIDTH);
+                const descHeight = descLines * LINE_HEIGHT_DESC;
+
+                const requiredTextHeight = nameHeight + 5 + descHeight + LINE_HEIGHT_DESC;
+                
+                const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
+                
+                totalHeight += blockHeight + ITEM_GAP; 
+            }
+
+            return { requiredHeight: totalHeight }; 
+        }
+        
+        async function calculateTwoColumnCharacterSectionHeight(ctxRef, characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X) {
+            const CHAR_IMG_SIZE = 60;
+            const TEXT_OFFSET = 80;
+            const LINE_HEIGHT_NAME = 20;
+            const LINE_HEIGHT_DESC = 16;
+            const ITEM_GAP = 15; 
+            const MAX_VIRTUAL_HEIGHT = 800;
+            
+            const colWidth = (totalW - PADDING_X) / 2;
+            const MAX_TEXT_WIDTH = colWidth - TEXT_OFFSET - PADDING_X;
+            
+            let col1CurrentY = PADDING + HEADER_HEIGHT + 10; 
+            let col2CurrentY = PADDING + HEADER_HEIGHT + 10; 
+            
+            let col1MaxY = col1CurrentY; 
+            let col2MaxY = col2CurrentY;
+
+            for (const char of characters) {
+                ctxRef.font = 'bold 18px "Noto Sans JP", sans-serif';
+                const nameLines = calculateTextLines(ctxRef, char.name, MAX_TEXT_WIDTH);
+                const nameHeight = nameLines * LINE_HEIGHT_NAME;
+
+                ctxRef.font = '14px "Noto Sans JP", sans-serif';
+                const descLines = calculateTextLines(ctxRef, char.description, MAX_TEXT_WIDTH);
+                const descHeight = descLines * LINE_HEIGHT_DESC;
+                
+                const requiredTextHeight = nameHeight + 5 + descHeight + LINE_HEIGHT_DESC;
+                const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
+
+                let targetY;
+
+                if (col1CurrentY <= col2CurrentY) {
+                    targetY = col1CurrentY;
+                } else {
+                    targetY = col2CurrentY;
+                }
+                
+                if (targetY + blockHeight + ITEM_GAP > MAX_VIRTUAL_HEIGHT + PADDING) {
+                    break;
+                }
+
+                if (targetY === col1CurrentY) {
+                    col1CurrentY += blockHeight + ITEM_GAP;
+                    col1MaxY = col1CurrentY;
+                } else {
+                    col2CurrentY += blockHeight + ITEM_GAP;
+                    col2MaxY = col2CurrentY;
+                }
+            }
+            
+            const requiredHeight = Math.max(col1MaxY, col2MaxY) + PADDING; 
+
+            return { requiredHeight: Math.max(MAX_VIRTUAL_HEIGHT, requiredHeight) }; 
+        }
+
         function calculateTextLines(ctx, text, maxWidth) {
             // [修正] 日本語の文字単位分割と欧文の単語分割に対応
             const isJapanese = (str) => /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uff66-\uff9f]/.test(str);
@@ -3703,6 +4051,119 @@
             }
             
             return totalLines;
+        }
+
+        // [修正] drawHandDrawnSketch: 視認性向上のための縁取りを追加
+        async function drawHandDrawnSketch(ctxRef, base64Data, targetX, targetY, targetW, targetH, improvedVisibility = false) {
+             const img = new Image();
+             img.crossOrigin = "anonymous";
+             img.src = base64Data;
+             
+             // [修正] 視認性向上のために、一旦別の Canvas に描画して縁取りを追加
+
+             if (improvedVisibility) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = targetW;
+                tempCanvas.height = targetH;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                await new Promise(resolve => {
+                    img.onload = () => {
+                        tempCtx.drawImage(img, 0, 0, targetW, targetH);
+                        resolve();
+                    };
+                    img.onerror = resolve; 
+                });
+
+                // 縁取り (Stroke) を追加
+                const originalData = tempCtx.getImageData(0, 0, targetW, targetH);
+                const data = originalData.data;
+                const strokeColor = { r: 17, g: 17, b: 17, a: 255 }; // フレーム背景色 (#111)
+
+                // 非常にシンプルな縁取り処理（重い可能性あり）
+                for (let y = 0; y < targetH; y++) {
+                    for (let x = 0; x < targetW; x++) {
+                        const i = (y * targetW + x) * 4;
+                        const alpha = data[i + 3];
+
+                        if (alpha > 0) { // 描画されているピクセル
+                            // 周囲のピクセルに縁取りを適用
+                            for (let dy = -1; dy <= 1; dy++) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                    if (dx === 0 && dy === 0) continue;
+
+                                    const nx = x + dx;
+                                    const ny = y + dy;
+
+                                    if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
+                                        const ni = (ny * targetW + nx) * 4;
+                                        const neighborAlpha = data[ni + 3];
+
+                                        if (neighborAlpha === 0) {
+                                            // 周囲の透明なピクセルに黒（#111）の縁を適用
+                                            tempCtx.fillStyle = `rgba(${strokeColor.r}, ${strokeColor.g}, ${strokeColor.b}, 1)`;
+                                            tempCtx.fillRect(nx, ny, 1, 1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 元の描画を上書き
+                tempCtx.drawImage(img, 0, 0, targetW, targetH);
+                
+                ctxRef.drawImage(tempCanvas, targetX, targetY, targetW, targetH);
+
+            } else {
+                 await new Promise(resolve => {
+                     img.onload = () => {
+                         ctxRef.drawImage(img, targetX, targetY, targetW, targetH);
+                         resolve();
+                     };
+                     img.onerror = resolve; 
+                 });
+            }
+        }
+        
+        // [修正] drawImagesInSketch: 描画フレームサイズと論理サイズの両方を引数として受け取る
+        async function drawImagesInSketch(ctxRef, images, frameX, frameY, frameW, frameH) {
+             for (const imgData of images) {
+                 const img = new Image();
+                 img.crossOrigin = "anonymous";
+                 img.src = imgData.src;
+
+                 await new Promise(resolve => {
+                     img.onload = () => {
+                         // [修正] パーセンテージをフレームのピクセル値に変換
+                         const drawX_percent = imgData.x; // 0-100%
+                         const drawY_percent = imgData.y; // 0-100%
+                         const drawW_percent = imgData.width; // 0-100%
+                         const drawH_percent = imgData.height; // 0-100%
+                         
+                         // フレーム内でのピクセル位置とサイズ
+                         const drawX = frameX + (frameW * drawX_percent / 100);
+                         const drawY = frameY + (frameH * drawY_percent / 100);
+                         const drawW = frameW * drawW_percent / 100;
+                         const drawH = frameH * drawH_percent / 100;
+                         
+                         const rotation = imgData.rotation * Math.PI / 180;
+
+                         const centerX = drawX + drawW / 2;
+                         const centerY = drawY + drawH / 2;
+
+                         ctxRef.save();
+                         ctxRef.translate(centerX, centerY);
+                         ctxRef.rotate(rotation);
+                         ctxRef.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+                         ctxRef.restore();
+                         
+                         resolve();
+                     };
+                     img.onerror = resolve;
+                 });
+             }
         }
 
         function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxHeight = Infinity) {
@@ -3781,244 +4242,42 @@
             return lineY; 
         }
 
-        // [追加] 高さを計算するだけのヘルパー関数 (描画ロジックの再利用)
-        function requiredHeight(characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT) {
-             const BASE_SCALE_FACTOR = 1920 / 800;
-             const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
-             const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
-             const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8;
-             const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
-             
-             const MAX_TEXT_WIDTH = totalW - TEXT_OFFSET - (PADDING_X * 2);
+        async function drawReferenceImageContent(ctxRef, x, y, w, h) {
+            const refImage = state.generalSettings.referenceImage;
             
-             let totalHeight = 0; // PADDING + HEADER_HEIGHT + 10 は drawReferenceImage 側で追加されるため、ここでは純粋なコンテンツの高さ
+            if (refImage) {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.src = refImage;
 
-             // [ダミーコンテキスト] テキスト行数を計算するために一時的なCanvasを準備
-             const dummyCanvas = document.createElement('canvas');
-             const dummyCtx = dummyCanvas.getContext('2d');
-             
-             for (const char of characters) {
-                 // ctxRef.font の設定を再現
-                 dummyCtx.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
-                 const nameLines = calculateTextLines(dummyCtx, char.name, MAX_TEXT_WIDTH);
-                 const nameHeight = nameLines * LINE_HEIGHT_NAME;
-
-                 dummyCtx.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                 const descLines = calculateTextLines(dummyCtx, char.description, MAX_TEXT_WIDTH);
-                 const descHeight = descLines * LINE_HEIGHT_DESC;
-
-                 const requiredTextHeight = nameHeight + 5 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
-                 
-                 const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
-                 
-                 totalHeight += blockHeight + ITEM_GAP; 
-             }
-
-             return totalHeight; 
-        }
-
-        // [修正] 縦長レイアウトのキャラセクション計算関数にスケールパラメータを追加
-        async function calculateTwoColumnCharacterSectionHeight(ctxRef, characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT, MAX_VIRTUAL_HEIGHT) {
-            const BASE_SCALE_FACTOR = 1920 / 800;
-            const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
-            const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8; 
-            const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
-            
-            const colWidth = (totalW - PADDING_X) / 2;
-            const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
-            const MAX_TEXT_WIDTH = colWidth - TEXT_OFFSET - PADDING_X;
-            
-            let col1CurrentY = PADDING + HEADER_HEIGHT + 10 * BASE_SCALE_FACTOR; 
-            let col2CurrentY = PADDING + HEADER_HEIGHT + 10 * BASE_SCALE_FACTOR; 
-            
-            let col1MaxY = col1CurrentY; 
-            let col2MaxY = col2CurrentY;
-
-            for (const char of characters) {
-                // ctxRef.font の設定を再現
-                ctxRef.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                const nameLines = calculateTextLines(ctxRef, char.name, MAX_TEXT_WIDTH);
-                const nameHeight = nameLines * LINE_HEIGHT_NAME;
-
-                ctxRef.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                const descLines = calculateTextLines(ctxRef, char.description, MAX_TEXT_WIDTH);
-                const descHeight = descLines * LINE_HEIGHT_DESC;
-                
-                const requiredTextHeight = nameHeight + 5 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
-                const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
-
-                let targetY;
-
-                if (col1CurrentY <= col2CurrentY) {
-                    targetY = col1CurrentY;
-                } else {
-                    targetY = col2CurrentY;
-                }
-                
-                if (targetY + blockHeight + ITEM_GAP > MAX_VIRTUAL_HEIGHT + PADDING) {
-                    break;
-                }
-
-                if (targetY === col1CurrentY) {
-                    col1CurrentY += blockHeight + ITEM_GAP;
-                    col1MaxY = col1CurrentY;
-                } else {
-                    col2CurrentY += blockHeight + ITEM_GAP;
-                    col2MaxY = col2CurrentY;
-                }
-            }
-            
-            const requiredHeight = Math.max(col1MaxY, col2MaxY) + PADDING; 
-
-            return { requiredHeight: Math.max(MAX_VIRTUAL_HEIGHT, requiredHeight) }; 
-        }
-
-        // [修正] 横長レイアウトのキャラセクション計算関数にスケールパラメータを追加
-        async function calculateCharacterSectionHeight(ctxRef, characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT) {
-            const BASE_SCALE_FACTOR = 1920 / 800;
-            const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
-            const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
-            const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8;
-            const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
-            
-            const MAX_TEXT_WIDTH = totalW - TEXT_OFFSET - (PADDING_X * 2);
-            
-            let totalHeight = PADDING + HEADER_HEIGHT + 10 * BASE_SCALE_FACTOR; 
-
-            for (const char of characters) {
-                // ctxRef.font の設定を再現
-                ctxRef.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
-                const nameLines = calculateTextLines(ctxRef, char.name, MAX_TEXT_WIDTH);
-                const nameHeight = nameLines * LINE_HEIGHT_NAME;
-
-                ctxRef.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                const descLines = calculateTextLines(ctxRef, char.description, MAX_TEXT_WIDTH);
-                const descHeight = descLines * LINE_HEIGHT_DESC;
-
-                const requiredTextHeight = nameHeight + 5 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
-                
-                const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
-                
-                totalHeight += blockHeight + ITEM_GAP; 
-            }
-
-            return { requiredHeight: totalHeight }; 
-        }
-        
-        // [復元] drawImagesInSketch: 描画フレームサイズと論理サイズの両方を引数として受け取る
-        async function drawImagesInSketch(ctxRef, images, frameX, frameY, frameW, frameH) {
-             for (const imgData of images) {
-                 const img = new Image();
-                 img.crossOrigin = "anonymous";
-                 img.src = imgData.src;
-
-                 await new Promise(resolve => {
-                     img.onload = () => {
-                         // [修正] パーセンテージをフレームのピクセル値に変換
-                         const drawX_percent = imgData.x; // 0-100%
-                         const drawY_percent = imgData.y; // 0-100%
-                         const drawW_percent = imgData.width; // 0-100%
-                         const drawH_percent = imgData.height; // 0-100%
-                         
-                         // フレーム内でのピクセル位置とサイズ
-                         const drawX = frameX + (frameW * drawX_percent / 100);
-                         const drawY = frameY + (frameH * drawY_percent / 100);
-                         const drawW = frameW * drawW_percent / 100;
-                         const drawH = frameH * drawH_percent / 100;
-                         
-                         const rotation = imgData.rotation * Math.PI / 180;
-
-                         const centerX = drawX + drawW / 2;
-                         const centerY = drawY + drawH / 2;
-
-                         ctxRef.save();
-                         ctxRef.translate(centerX, centerY);
-                         ctxRef.rotate(rotation);
-                         ctxRef.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-                         ctxRef.restore();
-                         
-                         resolve();
-                     };
-                     img.onerror = resolve;
-                 });
-             }
-        }
-        
-        // [復元] drawHandDrawnSketch: 視認性向上のための縁取りを追加
-        async function drawHandDrawnSketch(ctxRef, base64Data, targetX, targetY, targetW, targetH, improvedVisibility = false) {
-             const img = new Image();
-             img.crossOrigin = "anonymous";
-             img.src = base64Data;
-             
-             // [修正] 視認性向上のために、一旦別の Canvas に描画して縁取りを追加
-
-             if (improvedVisibility) {
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = targetW;
-                tempCanvas.height = targetH;
-                const tempCtx = tempCanvas.getContext('2d');
-                
                 await new Promise(resolve => {
                     img.onload = () => {
-                        tempCtx.drawImage(img, 0, 0, targetW, targetH);
+                        const scale = Math.min(w / img.width, h / img.height);
+                        const drawW = img.width * scale;
+                        const drawH = img.height * scale;
+                        const drawX = x + (w - drawW) / 2;
+                        const drawY = y + (h - drawH) / 2;
+                        
+                        ctxRef.drawImage(img, drawX, drawY, drawW, drawH);
                         resolve();
                     };
-                    img.onerror = resolve; 
+                    img.onerror = () => {
+                        ctxRef.fillStyle = '#444';
+                        ctxRef.fillRect(x, y, w, h);
+                        ctxRef.font = '24px "Noto Sans JP", sans-serif';
+                        ctxRef.fillStyle = '#aaa';
+                        ctxRef.textAlign = 'center';
+                        ctxRef.fillText('画像読込エラー', x + w / 2, y + h / 2);
+                        resolve();
+                    };
                 });
-
-                // 縁取り (Stroke) を追加
-                const originalData = tempCtx.getImageData(0, 0, targetW, targetH);
-                const data = originalData.data;
-                const strokeColor = { r: 17, g: 17, b: 17, a: 255 }; // フレーム背景色 (#111)
-
-                // 非常にシンプルな縁取り処理（重い可能性あり）
-                for (let y = 0; y < targetH; y++) {
-                    for (let x = 0; x < targetW; x++) {
-                        const i = (y * targetW + x) * 4;
-                        const alpha = data[i + 3];
-
-                        if (alpha > 0) { // 描画されているピクセル
-                            // 周囲のピクセルに縁取りを適用
-                            for (let dy = -1; dy <= 1; dy++) {
-                                for (let dx = -1; dx <= 1; dx++) {
-                                    if (dx === 0 && dy === 0) continue;
-
-                                    const nx = x + dx;
-                                    const ny = y + dy;
-
-                                    if (nx >= 0 && nx < targetW && ny >= 0 && ny < targetH) {
-                                        const ni = (ny * targetW + nx) * 4;
-                                        const neighborAlpha = data[ni + 3];
-
-                                        if (neighborAlpha === 0) {
-                                            // 周囲の透明なピクセルに黒（#111）の縁を適用
-                                            tempCtx.fillStyle = `rgba(${strokeColor.r}, ${strokeColor.g}, ${strokeColor.b}, 1)`;
-                                            tempCtx.fillRect(nx, ny, 1, 1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // 元の描画を上書き
-                tempCtx.drawImage(img, 0, 0, targetW, targetH);
-                
-                ctxRef.drawImage(tempCanvas, targetX, targetY, targetW, targetH);
-
             } else {
-                 await new Promise(resolve => {
-                     img.onload = () => {
-                         ctxRef.drawImage(img, targetX, targetY, targetW, targetH);
-                         resolve();
-                     };
-                     img.onerror = resolve; 
-                 });
+                ctxRef.fillStyle = '#444'; 
+                ctxRef.fillRect(x, y, w, h);
             }
         }
-        
-        // [復元] drawCharactersInSketch: 視認性向上のための縁取りを追加
+
+        // [修正] drawCharactersInSketch: 視認性向上のための縁取りを追加
         async function drawCharactersInSketch(ctxRef, characters, frameX, frameY, frameW, frameH, improvedVisibility = false) {
              
              for (const char of characters) {
@@ -4046,369 +4305,15 @@
                  ctxRef.fillText(charData.name, drawX, drawY);
              }
         }
-        
-        async function drawReferenceImageContent(ctxRef, x, y, w, h) {
-            const refImage = state.generalSettings.referenceImage;
-            
-            if (refImage) {
-                const img = new Image();
-                img.crossOrigin = "anonymous";
-                img.src = refImage;
-
-                await new Promise(resolve => {
-                    img.onload = () => {
-                        // [修正] アスペクト比を維持して、中央に描画 (contain)
-                        const scale = Math.min(w / img.width, h / img.height);
-                        const drawW = img.width * scale;
-                        const drawH = img.height * scale;
-                        const drawX = x + (w - drawW) / 2;
-                        const drawY = y + (h - drawH) / 2;
-                        
-                        ctxRef.drawImage(img, drawX, drawY, drawW, drawH);
-                        resolve();
-                    };
-                    img.onerror = () => {
-                        ctxRef.fillStyle = '#444';
-                        ctxRef.fillRect(x, y, w, h);
-                        ctxRef.font = '24px "Noto Sans JP", sans-serif';
-                        ctxRef.fillStyle = '#aaa';
-                        ctxRef.textAlign = 'center';
-                        ctxRef.fillText('画像読込エラー', x + w / 2, y + h / 2);
-                        resolve();
-                    };
-                });
-            } else {
-                ctxRef.fillStyle = '#444'; 
-                ctxRef.fillRect(x, y, w, h);
-            }
-        }
-        // =========================================================================
-
-        async function drawReferenceImage() {
-            const canvasRef = document.getElementById('reference-image-canvas');
-            const ctxRef = canvasRef.getContext('2d');
-            
-            const ASPECT = state.generalSettings.aspectRatio;
-            
-            // [修正] スケーリングを考慮した定数 (1920px 基準)
-            const BASE_SIZE_VERTICAL = 1920; 
-            const BASE_SIZE_HORIZONTAL = 1920; 
-            
-            // 基準のサイズ (縦長は高さ1920、横長は幅1920)
-            const SCALE_FACTOR = 1920 / 800; // 旧基準高さ800に対するスケーリング
-
-            const PADDING = 20 * SCALE_FACTOR; 
-            const TEXT_LINE_HEIGHT = 20 * SCALE_FACTOR; // 行間
-            const PADDING_X = 20 * SCALE_FACTOR; 
-            const CHAR_IMG_SIZE = 60 * SCALE_FACTOR;
-            const FRAME_LEFT_MARGIN = 100 * SCALE_FACTOR; 
-            const SCENE_W_UNIT = 180 * SCALE_FACTOR; 
-            const SCENE_HEIGHT_PER_ROW = 120 * SCALE_FACTOR; 
-            const HEADER_HEIGHT = 30 * SCALE_FACTOR; 
-            
-            
-            const projectUsedCharacters = allCharacters.filter(c => state.generalSettings.projectCharacters.includes(c.id));
-            
-            const DEBUG_BOUNDS = document.getElementById('debug-text-bounds')?.checked || false;
-
-            let W, H;
-            let CENTER_FRAME_W, CENTER_FRAME_H;
-            let MAX_SIDE_SIZE = 0; 
-            
-            if (ASPECT === '9:16_vertical') {
-                // 縦長 (9:16) - 基準は高さ 1920px
-                CENTER_FRAME_H = BASE_SIZE_VERTICAL; // 1920
-                CENTER_FRAME_W = CENTER_FRAME_H * 9 / 16; // 1080
-                
-                const SCENE_BLOCK_TOTAL_W = SCENE_W_UNIT + PADDING_X * 2;
-                const LEFT_SIDE_W_REQUIRED = SCENE_BLOCK_TOTAL_W * state.scenes.length; 
-                
-                ctxRef.font = `bold ${18 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
-                const AVG_CHAR_WIDTH = 12 * SCALE_FACTOR; 
-                const TARGET_TEXT_WIDTH = AVG_CHAR_WIDTH * 20; 
-                const CHAR_COL_MIN_W = CHAR_IMG_SIZE + 20 * SCALE_FACTOR + TARGET_TEXT_WIDTH + PADDING_X; 
-                const RIGHT_SIDE_W_REQUIRED = CHAR_COL_MIN_W * 2 + PADDING_X; 
-
-                MAX_SIDE_SIZE = Math.max(LEFT_SIDE_W_REQUIRED, RIGHT_SIDE_W_REQUIRED); 
-                
-                const LEFT_SIDE_W = MAX_SIDE_SIZE;
-                const RIGHT_SIDE_W = MAX_SIDE_SIZE;
-                
-                // [修正] スケールパラメータを渡す
-                const { requiredHeight: charRequiredH } = await calculateTwoColumnCharacterSectionHeight(
-                    ctxRef, projectUsedCharacters, RIGHT_SIDE_W, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT, BASE_SIZE_VERTICAL
-                );
-
-                H = Math.max(CENTER_FRAME_H, charRequiredH);
-                W = LEFT_SIDE_W + CENTER_FRAME_W + RIGHT_SIDE_W; 
-                
-                canvasRef.setAttribute('width', W);
-                canvasRef.setAttribute('height', H);
-
-                
-                let currentX = 0; 
-                
-                const SCENE_BLOCK_ACTUAL_W = SCENE_BLOCK_TOTAL_W * state.scenes.length;
-                const SCENE_OFFSET_X = (LEFT_SIDE_W - SCENE_BLOCK_ACTUAL_W) / 2;
-
-                currentX += SCENE_OFFSET_X > 0 ? SCENE_OFFSET_X : 0;
-
-                for (const scene of state.scenes) {
-                    const sceneW = SCENE_BLOCK_TOTAL_W;
-                    
-                    ctxRef.fillStyle = '#212121';
-                    ctxRef.fillRect(currentX, 0, sceneW, H); 
-                    ctxRef.strokeStyle = '#333';
-                    ctxRef.lineWidth = 1 * SCALE_FACTOR;
-                    ctxRef.strokeRect(currentX, 0, sceneW, H);
-                    
-                    const FRAME_W = SCENE_W_UNIT;
-                    const FRAME_H = FRAME_W * (16 / 9); 
-                    const FRAME_X = currentX + PADDING_X; 
-                    
-                    const HEADER_SPACE = 40 * SCALE_FACTOR; 
-                    const FRAME_Y = HEADER_SPACE; 
-                    
-                    ctxRef.strokeStyle = '#238636';
-                    ctxRef.lineWidth = 4 * SCALE_FACTOR;
-                    ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
-                    ctxRef.fillStyle = '#111';
-                    ctxRef.fillRect(FRAME_X + 2 * SCALE_FACTOR, FRAME_Y + 2 * SCALE_FACTOR, FRAME_W - 4 * SCALE_FACTOR, FRAME_H - 4 * SCALE_FACTOR);
-                    
-                    if (scene.sketchData.images && scene.sketchData.images.length > 0) {
-                         // [修正] drawImagesInSketch の引数を修正
-                         await drawImagesInSketch(ctxRef, scene.sketchData.images, FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
-                    }
-
-                    if (scene.sketchData.handDrawn) {
-                         // [修正] 手書き描画の視認性を向上させる
-                         await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W, FRAME_H, true);
-                    }
-
-                    ctxRef.font = `bold ${20 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                    ctxRef.fillStyle = '#f0f0f0'; 
-                    ctxRef.textAlign = 'left';
-                    ctxRef.fillText(scene.timeStart, currentX + PADDING_X, PADDING); 
-                    
-                    ctxRef.font = `${12 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                    ctxRef.fillStyle = '#f0f0f0';
-                    
-                    const TEXT_START_Y = FRAME_Y + FRAME_H + 20 * SCALE_FACTOR; 
-                    // [修正] テキスト領域の高さをシーンの底まで確保
-                    const TEXT_MAX_HEIGHT = H - TEXT_START_Y - PADDING; 
-                    
-                    const TEXT_AREA_X = currentX + PADDING_X;
-                    const TEXT_AREA_Y = TEXT_START_Y;
-                    const TEXT_AREA_W = sceneW - PADDING_X * 2;
-                    
-                    // [追加] デバッグ用の枠描画
-                    if (DEBUG_BOUNDS) {
-                        ctxRef.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-                        ctxRef.lineWidth = 1 * SCALE_FACTOR;
-                        ctxRef.strokeRect(TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_MAX_HEIGHT);
-                    }
-                    
-                    // [修正] wrapText の改行処理を有効化
-                    wrapText(ctxRef, scene.promptDescription, TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_LINE_HEIGHT * 0.8, TEXT_AREA_Y + TEXT_MAX_HEIGHT);
-
-                    // [修正] キャラクター名の視認性を向上させる
-                    await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W, FRAME_H, true);
-                    currentX += sceneW;
-                }
-                
-                currentX = LEFT_SIDE_W;
-
-                const CENTER_X = currentX; 
-                ctxRef.clearRect(CENTER_X, 0, CENTER_FRAME_W, CENTER_FRAME_H); 
-                await drawReferenceImageContent(ctxRef, CENTER_X, 0, CENTER_FRAME_W, CENTER_FRAME_H);
-
-                currentX = CENTER_X + CENTER_FRAME_W;
 
 
-                const CHAR_X = currentX;
-                const CHAR_W = RIGHT_SIDE_W; 
-                
-                ctxRef.fillStyle = '#2b2b2b';
-                ctxRef.fillRect(CHAR_X, 0, CHAR_W, H); 
-                
-                ctxRef.font = `bold ${24 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                ctxRef.fillStyle = '#238636';
-                ctxRef.textAlign = 'left';
-                ctxRef.fillText('キャラ設定', CHAR_X + PADDING_X, PADDING + 10 * SCALE_FACTOR);
-                
-                const CHAR_SECTION_Y_START = PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR;
-                // [修正] スケールパラメータを渡す
-                await drawCharacterSection(ctxRef, projectUsedCharacters, CHAR_X, CHAR_SECTION_Y_START, CHAR_W, H - CHAR_SECTION_Y_START, PADDING, true, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT * 0.8); 
-                
-            } else { // 16:9_horizontal
-                
-                // 横長 (16:9) - 基準は幅 1920px
-                CENTER_FRAME_W = BASE_SIZE_HORIZONTAL; // 1920
-                CENTER_FRAME_H = CENTER_FRAME_W * 9 / 16; // 1080
-                W = CENTER_FRAME_W; 
-                
-                // 2. キャラクターセクションとシーンセクションの必要高さを計算
-                // [修正] スケールパラメータを渡す (計算関数はasyncではないため、直接呼び出す)
-                const { requiredHeight: charRequiredH_dummy } = await calculateCharacterSectionHeight(
-                    ctxRef, projectUsedCharacters, W, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT
-                );
-                
-                // 3. シーンセクションの必要高さを計算
-                const SCENE_CUT_MIN_H = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
-                
-                // 4. メイン画像の高さを基準に、上部と下部の高さを決定
-                let TARGET_BLOCK_HEIGHT = CENTER_FRAME_H / 2; // 1080 / 2 = 540px
-                
-                let SCENE_BLOCK_H_TOP = TARGET_BLOCK_HEIGHT; 
-                let CHAR_SECTION_H = TARGET_BLOCK_HEIGHT; 
-                
-                // [修正] 最小カット割り高さを確保し、上部/下部の高さを強制的に一致させる
-                if (SCENE_CUT_MIN_H > TARGET_BLOCK_HEIGHT) {
-                    SCENE_BLOCK_H_TOP = SCENE_CUT_MIN_H;
-                    CHAR_SECTION_H = SCENE_CUT_MIN_H; 
-                }
-
-                // 描画全体の高さは、上部 + 中央 + 下部
-                H = SCENE_BLOCK_H_TOP + CENTER_FRAME_H + CHAR_SECTION_H;
-                
-                canvasRef.setAttribute('width', W);
-                canvasRef.setAttribute('height', H);
-
-
-                let currentY = 0; 
-                
-                // --- 1. カット割り (上部) 描画 ---
-                const SCENE_BLOCK_Y = currentY;
-                
-                ctxRef.fillStyle = '#212121';
-                ctxRef.fillRect(0, SCENE_BLOCK_Y, W, SCENE_BLOCK_H_TOP);
-                
-                ctxRef.font = `bold ${24 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                ctxRef.fillStyle = '#238636';
-                ctxRef.textAlign = 'left';
-                ctxRef.fillText('カット割り（横長）', PADDING_X, SCENE_BLOCK_Y + PADDING + 10 * SCALE_FACTOR);
-
-                const SCENE_CUT_ACTUAL_H = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
-                // [修正] SCENE_BLOCK_H_TOPの高さの中央にカット割りセクションを配置
-                const SCENE_Y_OFFSET = (SCENE_BLOCK_H_TOP - SCENE_CUT_ACTUAL_H) / 2;
-                
-                state.scenes.forEach(async (scene, index) => {
-                    
-                    const blockY = SCENE_BLOCK_Y + SCENE_Y_OFFSET + PADDING + HEADER_HEIGHT + (index * SCENE_HEIGHT_PER_ROW);
-                    
-                    const FRAME_X = PADDING_X + FRAME_LEFT_MARGIN;
-                    
-                    const FRAME_PADDING = 10 * SCALE_FACTOR;
-                    const FRAME_H = SCENE_HEIGHT_PER_ROW - (FRAME_PADDING * 2); 
-                    const FRAME_W_TARGET = FRAME_H * (16 / 9); 
-                    
-                    const FRAME_Y = blockY + FRAME_PADDING;
-
-                    const PROMPT_X = FRAME_X + FRAME_W_TARGET + 15 * SCALE_FACTOR;
-                    const PROMPT_W = W - PROMPT_X - PADDING_X; 
-                    
-                    ctxRef.font = `bold ${14 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                    ctxRef.fillStyle = '#c9d1d9';
-                    ctxRef.textAlign = 'right';
-                    ctxRef.fillText(scene.timeStart, FRAME_LEFT_MARGIN - 5 * SCALE_FACTOR, FRAME_Y + FRAME_H / 2 + 5 * SCALE_FACTOR);
-                    
-                    ctxRef.strokeStyle = '#238636';
-                    ctxRef.lineWidth = 4 * SCALE_FACTOR;
-                    ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
-                    ctxRef.fillStyle = '#111';
-                    ctxRef.fillRect(FRAME_X + 2 * SCALE_FACTOR, FRAME_Y + 2 * SCALE_FACTOR, FRAME_W_TARGET - 4 * SCALE_FACTOR, FRAME_H - 4 * SCALE_FACTOR);
-                    
-                    if (scene.sketchData.images && scene.sketchData.images.length > 0) {
-                         // [修正] drawImagesInSketch の引数を修正
-                         await drawImagesInSketch(ctxRef, scene.sketchData.images, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
-                    }
-                    
-                    if (scene.sketchData.handDrawn) {
-                         // [修正] 手書き描画の視認性を向上させる
-                         await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H, true);
-                    }
-
-                    ctxRef.fillStyle = '#f0f0f0';
-                    ctxRef.font = `${12 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                    ctxRef.textAlign = 'left';
-                    
-                    const PROMPT_START_Y = FRAME_Y + 15 * SCALE_FACTOR;
-                    const TEXT_MAX_HEIGHT = FRAME_H - 25 * SCALE_FACTOR; // 描画可能な高さを確保
-
-                    const TEXT_AREA_X = PROMPT_X;
-                    const TEXT_AREA_Y = PROMPT_START_Y;
-                    const TEXT_AREA_W = PROMPT_W;
-                    
-                    // [追加] デバッグ用の枠描画
-                    if (DEBUG_BOUNDS) {
-                        ctxRef.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-                        ctxRef.lineWidth = 1 * SCALE_FACTOR;
-                        // [修正] Y座標を調整して描画エリア全体を囲む
-                        ctxRef.strokeRect(TEXT_AREA_X, TEXT_AREA_Y - 15 * SCALE_FACTOR, TEXT_AREA_W, TEXT_MAX_HEIGHT + 10 * SCALE_FACTOR);
-                    }
-
-                    // [修正] wrapText の改行処理を有効化
-                    wrapText(ctxRef, scene.promptDescription, TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_LINE_HEIGHT * 0.8, TEXT_MAX_HEIGHT + TEXT_AREA_Y);
-
-                    // [修正] キャラクター名の視認性を向上させる
-                    await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H, true);
-                });
-                
-                currentY += SCENE_BLOCK_H_TOP;
-
-                // --- 2. メイン画像 (中央) 描画 ---
-                const CENTER_Y = currentY;
-                const CENTER_X = (W - CENTER_FRAME_W) / 2; 
-
-                ctxRef.clearRect(0, CENTER_Y, W, CENTER_FRAME_H);
-                await drawReferenceImageContent(ctxRef, CENTER_X, CENTER_Y, CENTER_FRAME_W, CENTER_FRAME_H);
-
-                currentY += CENTER_FRAME_H;
-
-                // --- 3. キャラ設定 (下部) 描画 ---
-                const CHAR_BLOCK_Y = currentY;
-                const CHAR_W = W;
-                
-                ctxRef.fillStyle = '#2b2b2b';
-                ctxRef.fillRect(0, CHAR_BLOCK_Y, CHAR_W, CHAR_SECTION_H); 
-                
-                ctxRef.font = `bold ${24 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
-                ctxRef.fillStyle = '#238636';
-                ctxRef.textAlign = 'left';
-                ctxRef.fillText('キャラ設定', PADDING_X, CHAR_BLOCK_Y + PADDING + 10 * SCALE_FACTOR);
-                
-                const CHAR_SECTION_Y_START = CHAR_BLOCK_Y + PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR;
-                
-                // [修正] コンテンツの中央揃えのためのオフセット計算
-                const CHAR_CONTENT_H = requiredHeight(projectUsedCharacters, W, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT);
-                const CHAR_BLOCK_INNER_H = CHAR_SECTION_H - (PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR);
-                const CHAR_OFFSET_Y = (CHAR_BLOCK_INNER_H - CHAR_CONTENT_H) / 2;
-
-                // [修正] Y座標にオフセットを追加して、ブロックの垂直方向中央に配置
-                await drawCharacterSection(
-                    ctxRef, 
-                    projectUsedCharacters, 
-                    0, 
-                    CHAR_SECTION_Y_START + Math.max(0, CHAR_OFFSET_Y), // 0以下にはしない
-                    CHAR_W, 
-                    CHAR_SECTION_H - (PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR), 
-                    PADDING, 
-                    false,
-                    CHAR_IMG_SIZE,
-                    TEXT_LINE_HEIGHT * 0.8
-                );
-            }
-        }
-
-        // [修正] drawCharacterSection: スケールパラメータを追加
-        async function drawCharacterSection(ctxRef, characters, startX, startY, totalW, totalH, PADDING, isTwoColumn = false, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT) {
-            
-            const BASE_SCALE_FACTOR = 1920 / 800;
-            const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
-            const PADDING_X = 20 * BASE_SCALE_FACTOR;
-            const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
-            const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8;
-            const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
+        async function drawCharacterSection(ctxRef, characters, startX, startY, totalW, totalH, PADDING, isTwoColumn = false) {
+            const CHAR_IMG_SIZE = 60;
+            const TEXT_OFFSET = 80;
+            const PADDING_X = 20;
+            const LINE_HEIGHT_NAME = 20;
+            const LINE_HEIGHT_DESC = 16;
+            const ITEM_GAP = 15; 
             
             const MAX_DRAW_HEIGHT = startY + totalH; 
             
@@ -4418,8 +4323,6 @@
             
             if (isTwoColumn) {
                 colWidth = (totalW - PADDING_X) / 2;
-                // 縦長の場合の初期位置調整
-                 colStartY = startY; // 垂直中央揃え後の開始Y
             }
 
             let charY = startY; 
@@ -4448,60 +4351,44 @@
 
                     await new Promise(resolve => {
                         img.onload = () => {
-                            // --- [修正開始] 縦横比を維持して枠に収める (contain) ---
-                            const frameSize = CHAR_IMG_SIZE; // 枠の幅と高さは等しい
-                            const scale = Math.min(frameSize / img.width, frameSize / img.height);
-                            
-                            const drawW = img.width * scale;
-                            const drawH = img.height * scale;
-                            
-                            // 枠内での中央揃え
-                            const offsetX = (frameSize - drawW) / 2;
-                            const offsetY = (frameSize - drawH) / 2;
-
-                            ctxRef.fillStyle = '#30363d';
-                            ctxRef.fillRect(imgX, currentBlockY, frameSize, frameSize); // 背景を塗りつぶす (黒枠)
-                            ctxRef.drawImage(img, imgX + offsetX, currentBlockY + offsetY, drawW, drawH);
-                            // --- [修正終了] ---
+                            ctxRef.drawImage(img, imgX, currentBlockY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
                             resolve();
                         };
                         img.onerror = () => {
-                            // エラー時/ロード失敗時は以前のプレースホルダー表示
                             ctxRef.fillStyle = '#30363d';
                             ctxRef.fillRect(imgX, currentBlockY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
-                            ctxRef.font = `${12 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
+                            ctxRef.font = '12px "Noto Sans JP", sans-serif';
                             ctxRef.fillStyle = '#c9d1d9';
                             ctxRef.textAlign = 'center';
-                            ctxRef.fillText(char.name.charAt(0), imgX + CHAR_IMG_SIZE / 2, currentBlockY + CHAR_IMG_SIZE / 2 + 4 * BASE_SCALE_FACTOR);
+                            ctxRef.fillText(char.name.charAt(0), imgX + CHAR_IMG_SIZE / 2, currentBlockY + CHAR_IMG_SIZE / 2 + 4);
                             resolve();
                         };
                     });
                 } else {
-                    // 画像未設定時は以前のプレースホルダー表示
                     ctxRef.fillStyle = '#30363d';
                     ctxRef.fillRect(imgX, currentBlockY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
-                    ctxRef.font = `${12 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
+                    ctxRef.font = '12px "Noto Sans JP", sans-serif';
                     ctxRef.fillStyle = '#c9d1d9';
                     ctxRef.textAlign = 'center';
-                    ctxRef.fillText(char.name.charAt(0), imgX + CHAR_IMG_SIZE / 2, currentBlockY + CHAR_IMG_SIZE / 2 + 4 * BASE_SCALE_FACTOR);
+                    ctxRef.fillText(char.name.charAt(0), imgX + CHAR_IMG_SIZE / 2, currentBlockY + CHAR_IMG_SIZE / 2 + 4);
                 }
 
-                ctxRef.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
+                ctxRef.font = 'bold 18px "Noto Sans JP", sans-serif';
                 ctxRef.fillStyle = '#fff';
                 ctxRef.textAlign = 'left';
                 
                 const NAME_MAX_WIDTH = colWidth - TEXT_OFFSET - PADDING_X;
-                let nameDrawY = currentBlockY + 15 * BASE_SCALE_FACTOR; 
+                let nameDrawY = currentBlockY + 15; 
                 
                 nameDrawY = wrapText(ctxRef, char.name, textX, nameDrawY, NAME_MAX_WIDTH, LINE_HEIGHT_NAME, MAX_DRAW_HEIGHT - PADDING); 
 
-                ctxRef.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
+                ctxRef.font = '14px "Noto Sans JP", sans-serif';
                 ctxRef.fillStyle = '#c9d1d9';
                 
                 const descriptionText = char.description;
                 const DESC_MAX_WIDTH = NAME_MAX_WIDTH;
                 
-                let descDrawY = nameDrawY + 5 * BASE_SCALE_FACTOR; // 名前の行間＋5pxスペース
+                let descDrawY = nameDrawY + 5; // 名前の行間＋5pxスペース
                 
                 descDrawY = wrapText(ctxRef, descriptionText, textX, descDrawY, DESC_MAX_WIDTH, LINE_HEIGHT_DESC, MAX_DRAW_HEIGHT - PADDING);
 
