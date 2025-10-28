@@ -342,7 +342,6 @@
         .transform-image-wrapper img {
             width: 100%;
             height: 100%;
-            /* [修正] 画像は常に Contain で枠内に収める */
             object-fit: contain;
             /* [修正] 画像自体がイベントを遮らないように */
             pointer-events: none;
@@ -446,10 +445,6 @@
         .history-project-item:hover {
             background-color: #555; 
         }
-        /* [修正] アクティブなプロジェクトをより明確に */
-        .history-project-item.active-project {
-            background-color: #3e444b; /* 濃いめの背景色 */
-        }
         .project-menu-btn {
             background-color: transparent;
             border-radius: 50%;
@@ -545,7 +540,6 @@
             <span class="sidebar-icon">✎</span>
             <span class="sidebar-text">新規作成</span>
         </div>
-        <!-- [修正] 履歴リストのホバー制御はCSSとJSに任せ、初期は非表示 -->
         <div id="history-list" class="flex-grow overflow-y-auto mt-2 p-2" style="display: none;">
             <!-- シーンアイテムがここに挿入されます -->
         </div>
@@ -677,7 +671,7 @@
     
     <!-- モーダル定義エリア -->
 
-    <!-- 新規プロジェクト作成モーダル (項目拡張) -->
+    <!-- 新規プロジェクト作成モーダル -->
     <div id="new-project-modal" class="modal-overlay">
         <div class="modal-content w-full md:w-1/2">
             <h2 class="text-2xl font-bold mb-4">新規プロジェクト作成</h2>
@@ -690,39 +684,6 @@
                 <div class="input-group">
                     <label class="block text-sm font-medium mb-1">動画の総時間 (秒)</label>
                     <input type="number" id="new-total-duration" min="1" value="10" class="w-full">
-                </div>
-                <div class="input-group">
-                    <label class="block text-sm font-medium mb-1">画角設定</label>
-                    <select id="new-aspect-ratio" class="w-full p-2">
-                        <option value="16:9_horizontal">▬ 16:9 (Landscape)</option>
-                        <option value="9:16_vertical" selected>▮ 9:16 (Portrait)</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label class="block text-sm font-medium mb-1">全体概要プロンプト (動画全体に対する指示)</label>
-                    <textarea id="new-overall-prompt" rows="3" class="w-full" placeholder="例: 壮大で叙事詩的な雰囲気を持つSFアクション映画のトレイラーを作成"></textarea>
-                </div>
-                
-                <h3 class="text-xl mt-4 border-t border-gray-600 pt-3">デフォルト設定</h3>
-                 <div class="input-group">
-                    <label class="block text-sm font-medium mb-1">デフォルトカラー（コンセプト）</label>
-                    <select id="new-default-color-select" class="w-full p-2"></select>
-                    <input type="text" id="new-default-color-input" placeholder="自由入力 (例: Neo-Tokyo Synthwave)" class="w-full mt-1">
-                </div>
-                 <div class="input-group">
-                    <label class="block text-sm font-medium mb-1">デフォルトカメラ</label>
-                    <select id="new-default-camera-select" class="w-full p-2"></select>
-                    <input type="text" id="new-default-camera-input" placeholder="自由入力 (例: Dolly zoom)" class="w-full mt-1">
-                </div>
-                <div class="input-group">
-                    <label class="block text-sm font-medium mb-1">デフォルト場所</label>
-                    <select id="new-default-location-select" class="w-full p-2"></select>
-                    <input type="text" id="new-default-location-input" placeholder="自由入力 (例: 賑やかな渋谷の交差点)" class="w-full mt-1">
-                </div>
-                <div class="input-group">
-                    <label class="block text-sm font-medium mb-1">デフォルトサウンド</label>
-                    <select id="new-default-sound-select" class="w-full p-2"></select>
-                    <input type="text" id="new-default-sound-input" placeholder="自由入力 (例: Lo-fi hip-hop track)" class="w-full mt-1">
                 </div>
             </div>
             <div class="flex justify-end space-x-4 mt-6">
@@ -927,6 +888,7 @@
             <button class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded mt-6 float-right" onclick="closeModal('character-placement-modal')">キャンセル</button>
         </div>
     </div>
+
     <script>
         // --- 状態管理と初期データ ---
         // IndexedDB キー (localforageインスタンス名)
@@ -957,48 +919,52 @@
              return `${PROJECT_KEY_PREFIX}${projectId}`; // IndexedDBのキーとして使用
         }
         
-        // [修正] 初期サンプルプロジェクトのデフォルト値修正 (キャラ名、デフォルト設定、プロジェクトキャラ)
+        // デフォルトの状態 (初期サンプルプロジェクト)
         const DEFAULT_STATE = {
             generalSettings: {
                 projectId: generateProjectId(), 
                 projectName: 'サンプルプロジェクト',
                 totalDuration: 8, // 動画の総時間 (秒)
-                aspectRatio: '9:16_vertical', 
-                overallPrompt: '', 
-                defaultColor: '', // [修正] 空欄
-                defaultCamera: '', // [修正] 空欄
-                defaultLocation: '', // [修正] 空欄
-                defaultSound: '', // [修正] 空欄
+                aspectRatio: '9:16_vertical',
+                overallPrompt: '', // 新しく追加
+                defaultColor: 'Cyberpunk Neon', // 追加
+                defaultCamera: 'Tracking Shot',
+                defaultLocation: 'City Park',
+                defaultSound: 'Ambient Music',
                 outputFormat: 'json',
-                projectCharacters: [], // [修正] 空のリスト
-                referenceImage: null, 
+                projectCharacters: [1, 2], // プロジェクトで使用するキャラIDのリストを追加
+                referenceImage: null, // 参照用画像 (Base64)
             },
             scenes: [
                 { 
                     id: Date.now() + 10, 
                     name: 'シーン 1',
-                    duration: 4, 
+                    duration: 2, 
                     timeStart: '00:00', 
-                    end: '00:04',   
-                    color: { setting: '', inherit: true }, 
+                    end: '00:02',   
+                    color: { setting: 'Vibrant Green', inherit: false }, 
                     camera: { setting: 'Close-up', inherit: false }, 
                     location: { setting: 'City Park', inherit: false }, 
-                    sound: { setting: '', inherit: true }, 
+                    sound: { setting: 'Ambient Music', inherit: false }, 
                     promptDescription: 'Mel is cheerfully walking through a park.', 
-                    sketchData: { handDrawn: '', characters: [], images: [] } // [修正] 初期配置なし
+                    // [修正] 初期画像の座標をパーセンテージで設定 (犬の画像に合わせて 30% x 40% のサイズを想定)
+                    sketchData: { handDrawn: '', characters: [{ id: 1, x: 20, y: 20, name: 'メル' }], images: [{
+                        id: generateImageId(), src: 'https://placehold.co/100x100/30363d/f0f0f0?text=IMG', 
+                        x: 50, y: 50, width: 30, height: 40
+                    }] } 
                 },
                 { 
                     id: Date.now() + 20, 
                     name: 'シーン 2',
-                    duration: 4, 
-                    timeStart: '00:04', 
-                    end: '00:08',   
-                    color: { setting: 'Monochrome B&W', inherit: false }, 
-                    camera: { setting: '', inherit: true }, 
-                    location: { setting: '', inherit: true }, 
-                    sound: { setting: 'Rain Sounds', inherit: false }, 
-                    promptDescription: 'Mil suddenly appears behind the bench, looking mysterious.', 
-                    sketchData: { handDrawn: '', characters: [], images: [] } // [修正] 初期配置なし
+                    duration: 3, 
+                    timeStart: '00:02', 
+                    end: '00:05',   
+                    color: { setting: 'Inherit', inherit: true }, 
+                    camera: { setting: 'Wide Shot', inherit: false }, 
+                    location: { setting: 'City Park', inherit: true }, 
+                    sound: { setting: 'Ambient Music', inherit: true }, 
+                    promptDescription: 'Mika suddenly appears behind the bench, looking mysterious.', 
+                    sketchData: { handDrawn: '', characters: [{ id: 2, x: 70, y: 60, name: 'ミカ' }], images: [] } 
                 },
             ],
             activeSceneId: null,
@@ -1034,10 +1000,9 @@
         };
         
         let state = DEFAULT_STATE;
-        // [修正] サンプルキャラ名 'ミカ' -> 'ミル'
         let allCharacters = [
             { id: 1, name: 'メル', base64Image: null, description: '明るい赤毛の少女、元気いっぱい' },
-            { id: 2, name: 'ミル', base64Image: null, description: '青い髪の少女、クールで理知的' },
+            { id: 2, name: 'ミカ', base64Image: null, description: '青い髪の少女、クールで理知的' },
         ];
         let projectHistory = []; // { projectId, name, lastModified }
 
@@ -1097,8 +1062,7 @@
                 const resolveSetting = (type, defaultValue) => {
                     if (scene[type].inherit || scene[type].setting === 'Inherit' || scene[type].setting === '') {
                         if (previousScene) {
-                            // [修正] 前のシーンが 'Inherit' だった場合もデフォルト値にフォールバック
-                            return previousScene[type].setting === 'Inherit' || previousScene[type].setting === '' ? defaultValue : previousScene[type].setting;
+                            return previousScene[type].setting;
                         } else {
                             return defaultValue; 
                         }
@@ -1260,9 +1224,6 @@
 
                 // 3. キャラクターデータを保存
                 await charStore.setItem('allCharacters', allCharacters);
-                
-                // [修正] 保存が完了したら履歴リストを再レンダリング
-                renderHistoryList();
 
             } catch (error) {
                 console.error('Failed to save state to IndexedDB:', error);
@@ -1285,34 +1246,19 @@
                 // 2. キャラクターを読み込み
                 const storedCharacters = await charStore.getItem('allCharacters');
                 if (storedCharacters) {
-                    const defaultCharacters = allCharacters;
                     allCharacters = storedCharacters.map(char => {
-                        delete char.imageUrl; 
+                        delete char.imageUrl; // 古いプロパティを削除
                         if (!char.base64Image) char.base64Image = null;
-                        
-                        // [修正] サンプルキャラのIDが一致し、名前が古い場合のみ修正 ('ミカ' -> 'ミル')
-                        if (char.id === 2 && char.name === 'ミカ') {
-                            char.name = 'ミル';
-                        }
                         return char;
                     });
-                    
-                    if (!allCharacters.some(c => c.id === 1)) {
-                         allCharacters = [...defaultCharacters, ...allCharacters.filter(c => c.id !== 1 && c.id !== 2)];
-                    }
-                } else {
-                    await charStore.setItem('allCharacters', allCharacters);
                 }
 
                 // 3. 履歴を読み込み
                 projectHistory = await projectStore.getItem('projectHistoryList') || [];
-                
-                // [修正] 履歴リストを最終更新日でソート (最新が先頭)
-                projectHistory.sort((a, b) => b.lastModified - a.lastModified);
-
 
                 // 4. 現在のプロジェクトを読み込み（なければデフォルト）
                 if (projectHistory.length > 0) {
+                    projectHistory.sort((a, b) => b.lastModified - a.lastModified);
                     await loadProject(projectHistory[0].projectId, false); 
                 } else {
                     // デフォルトプロジェクトを初期化
@@ -1327,25 +1273,16 @@
                 state.activeSceneId = state.scenes[0]?.id;
             }
             
-            // 5. データ構造のマイグレーション（プロパティの欠落チェックとデフォルト値設定）
+            // 5. データ構造のマイグレーション（プロパティの欠落チェック）
             if (state.scenes && state.scenes.length > 0) {
                 state.scenes.forEach(scene => {
-                    // [修正] settingのデフォルト値を空文字列に変更
-                    if (scene.color === undefined) scene.color = { setting: '', inherit: true }; 
-                    if (scene.camera === undefined) scene.camera = { setting: '', inherit: true };
-                    if (scene.location === undefined) scene.location = { setting: '', inherit: true };
-                    if (scene.sound === undefined) scene.sound = { setting: '', inherit: true };
-                     if (scene.sketchData.images === undefined) scene.sketchData.images = []; 
+                    if (scene.color === undefined) scene.color = { setting: 'Inherit', inherit: true };
+                    if (scene.sketchData.images === undefined) scene.sketchData.images = []; 
                 });
             }
             if (state.generalSettings.overallPrompt === undefined) state.generalSettings.overallPrompt = '';
             if (state.generalSettings.referenceImage === undefined) state.generalSettings.referenceImage = null;
             if (state.generalSettings.projectCharacters === undefined) state.generalSettings.projectCharacters = [];
-            if (state.generalSettings.defaultColor === undefined) state.generalSettings.defaultColor = '';
-            if (state.generalSettings.defaultCamera === undefined) state.generalSettings.defaultCamera = '';
-            if (state.generalSettings.defaultLocation === undefined) state.generalSettings.defaultLocation = '';
-            if (state.generalSettings.defaultSound === undefined) state.generalSettings.defaultSound = '';
-            
         }
         
         async function migrateFromLocalStorage() {
@@ -1395,8 +1332,8 @@
             const loadedData = await projectStore.getItem(projectId);
             
             if (loadedData) {
+                loadedData.generalSettings.projectId = projectId; 
                 state.generalSettings = loadedData.generalSettings;
-                state.generalSettings.projectId = projectId; 
                 state.scenes = loadedData.scenes;
                 state.activeSceneId = loadedData.activeSceneId;
             } else if (projectHistory.length > 0) {
@@ -1413,36 +1350,26 @@
             // データマイグレーションを再度実行
             if (state.scenes && state.scenes.length > 0) {
                 state.scenes.forEach(scene => {
-                    // [修正] settingのデフォルト値を空文字列に変更
-                    if (scene.color === undefined) scene.color = { setting: '', inherit: true }; 
-                    if (scene.camera === undefined) scene.camera = { setting: '', inherit: true };
-                    if (scene.location === undefined) scene.location = { setting: '', inherit: true };
-                    if (scene.sound === undefined) scene.sound = { setting: '', inherit: true };
-                     if (scene.sketchData.images === undefined) scene.sketchData.images = []; 
+                    if (scene.color === undefined) {
+                        scene.color = { setting: 'Inherit', inherit: true };
+                    }
+                     if (scene.sketchData.images === undefined) {
+                        scene.sketchData.images = []; 
+                    }
                 });
             }
             if (state.generalSettings.overallPrompt === undefined) state.generalSettings.overallPrompt = '';
             if (state.generalSettings.referenceImage === undefined) state.generalSettings.referenceImage = null;
             if (state.generalSettings.projectCharacters === undefined) state.generalSettings.projectCharacters = [];
-            if (state.generalSettings.defaultColor === undefined) state.generalSettings.defaultColor = '';
-            if (state.generalSettings.defaultCamera === undefined) state.generalSettings.defaultCamera = '';
-            if (state.generalSettings.defaultLocation === undefined) state.generalSettings.defaultLocation = '';
-            if (state.generalSettings.defaultSound === undefined) state.generalSettings.defaultSound = '';
 
             
             if (saveAndRender) {
-                // [修正] ここで保存することで、lastModifiedを更新し、renderHistoryListが正しいソートを行う準備をする
                 await saveAll();
                 setupCanvasListeners(); 
-                resizeQueued = true; 
                 renderAll();
+                resizeQueued = true; 
                 selectScene(state.activeSceneId || state.scenes[0]?.id, false); 
-            } else {
-                 // loadAllから呼ばれる場合 (saveAndRender=false)、履歴リストの表示を更新する
-                 renderHistoryList();
             }
-            // [修正] DOM更新の最終段階で renderHistoryList を呼び出し、アクティブなプロジェクトがハイライトされるようにする
-            renderHistoryList();
         }
         
         async function duplicateProject(projectId) {
@@ -1464,10 +1391,8 @@
                 // [修正] 履歴リストをIndexedDBから読み込み直し、新しいエントリを追加
                 projectHistory = await projectStore.getItem('projectHistoryList') || [];
                 projectHistory.push({ projectId: newId, name: newName, lastModified: newProjectData.lastModified });
-                
-                // [修正] 複製後、新しいプロジェクトをロードしてUIを更新
+                await saveAll(); // projectHistoryListも更新される
                 await loadProject(newId);
-                
             } catch(e) {
                  if (e.name === 'QuotaExceededError') {
                      alert('容量上限をオーバーしました。プロジェクトの複製に失敗しました。');
@@ -1489,9 +1414,6 @@
             
             projectHistory = projectHistory.filter(p => p.projectId !== projectId);
             
-            // [修正] 削除後、プロジェクト履歴リストのキーも更新する
-            await projectStore.setItem('projectHistoryList', projectHistory);
-            
             if (state.generalSettings.projectId === projectId) {
                 // 削除したプロジェクトがアクティブだった場合、最新のプロジェクトをロード
                 await loadProject(projectHistory[0].projectId);
@@ -1504,7 +1426,7 @@
 
         function renderAll() {
             recalculateSceneTimes();
-            renderHistoryList(); // [修正] saveAll()からも呼ばれるが、ここで明示的に呼ぶ
+            renderHistoryList();
             renderSceneEditor();
             updateOutput(); 
             updateHeaderProjectName();
@@ -1526,25 +1448,6 @@
         function openNewProjectModal() {
             document.getElementById('new-project-modal').querySelector('#new-project-name').value = '新しいプロジェクト ' + (projectHistory.length + 1);
             document.getElementById('new-project-modal').querySelector('#new-total-duration').value = 10;
-            
-            // [修正] 新規プロジェクトモーダルの選択肢を設定
-            populateSelect('new-default-color-select', STATIC_OPTIONS.color.options);
-            populateSelect('new-default-camera-select', STATIC_OPTIONS.camera.options);
-            populateSelect('new-default-location-select', STATIC_OPTIONS.location.options);
-            populateSelect('new-default-sound-select', STATIC_OPTIONS.sound.options);
-            
-            // [修正] 項目をリセット
-            document.getElementById('new-aspect-ratio').value = '9:16_vertical';
-            document.getElementById('new-overall-prompt').value = '';
-            document.getElementById('new-default-color-select').value = '';
-            document.getElementById('new-default-color-input').value = '';
-            document.getElementById('new-default-camera-select').value = '';
-            document.getElementById('new-default-camera-input').value = '';
-            document.getElementById('new-default-location-select').value = '';
-            document.getElementById('new-default-location-input').value = '';
-            document.getElementById('new-default-sound-select').value = '';
-            document.getElementById('new-default-sound-input').value = '';
-            
             openModal('new-project-modal');
         }
 
@@ -1560,38 +1463,18 @@
                 alert('動画の総時間は1秒以上で入力してください。');
                 return;
             }
-            
-            // [修正] 新しい設定項目を取得
-            const newAspectRatio = document.getElementById('new-aspect-ratio').value;
-            const newOverallPrompt = document.getElementById('new-overall-prompt').value.trim();
-            
-            const getNewSetting = (type) => {
-                const select = document.getElementById(`new-default-${type}-select`).value;
-                const input = document.getElementById(`new-default-${type}-input`).value.trim();
-                return input || select;
-            };
-
 
             const newState = JSON.parse(JSON.stringify(DEFAULT_STATE));
             newState.generalSettings.projectId = generateProjectId(); 
             newState.generalSettings.projectName = newName;
             newState.generalSettings.totalDuration = newDuration;
-            newState.generalSettings.aspectRatio = newAspectRatio;
-            newState.generalSettings.overallPrompt = newOverallPrompt;
-            newState.generalSettings.defaultColor = getNewSetting('color');
-            newState.generalSettings.defaultCamera = getNewSetting('camera');
-            newState.generalSettings.defaultLocation = getNewSetting('location');
-            newState.generalSettings.defaultSound = getNewSetting('sound');
-            // projectCharactersはDEFAULT_STATEで空になっているため変更不要
-            
-            // シーンの初期設定
             newState.scenes = [{ 
                 id: Date.now(), 
                 name: 'シーン 1',
                 duration: newDuration,
                 timeStart: '00:00', 
                 end: secondsToTime(newDuration),   
-                color: { setting: '', inherit: true }, 
+                color: { setting: 'Inherit', inherit: true }, 
                 camera: { setting: '', inherit: true },
                 location: { setting: '', inherit: true },
                 sound: { setting: '', inherit: true },
@@ -1764,9 +1647,7 @@
             const select = document.getElementById(selectId);
             if (!select) return; 
             
-            // [修正] デフォルトで未選択状態を追加
-            select.innerHTML = '<option value="" selected>-- 選択しない --</option>';
-            
+            select.innerHTML = '<option value="">-- 選択 --</option>';
             options.forEach(option => {
                 const opt = document.createElement('option');
                 opt.value = option.en;
@@ -1801,17 +1682,8 @@
                 const setting = state.generalSettings[`default${type.charAt(0).toUpperCase() + type.slice(1)}`];
                 const list = getOptionList(type);
 
-                // [修正] 設定値が空欄または未設定の場合は、両方のフィールドをクリア
-                if (!setting || setting === 'Inherit') {
-                    document.getElementById(`default-${type}-input`).value = '';
-                    document.getElementById(`default-${type}-select`).value = '';
-                } else if (list.includes(setting)) {
-                    document.getElementById(`default-${type}-input`).value = '';
-                    document.getElementById(`default-${type}-select`).value = setting;
-                } else {
-                    document.getElementById(`default-${type}-input`).value = setting;
-                    document.getElementById(`default-${type}-select`).value = '';
-                }
+                document.getElementById(`default-${type}-input`).value = list.includes(setting) ? '' : setting;
+                document.getElementById(`default-${type}-select`).value = list.includes(setting) ? setting : '';
             };
 
             checkAndSet('color');
@@ -1921,8 +1793,7 @@
             const getSetting = (type) => {
                 const select = document.getElementById(`default-${type}-select`).value;
                 const input = document.getElementById(`default-${type}-input`).value.trim();
-                // [修正] 入力も選択もなければ空文字列を返す
-                return input || select || '';
+                return input || select;
             };
 
             gs.defaultColor = getSetting('color');
@@ -2257,7 +2128,7 @@
                 duration: newDuration,
                 timeStart: secondsToTime(newStartTime),
                 end: secondsToTime(newStartTime + newDuration),
-                color: { setting: '', inherit: true },
+                color: { setting: 'Inherit', inherit: true },
                 camera: { setting: '', inherit: true },
                 location: { setting: '', inherit: true },
                 sound: { setting: '', inherit: true },
@@ -2339,25 +2210,16 @@
         function renderHistoryList() {
              const list = document.getElementById('history-list');
             list.innerHTML = `<h3 class="text-xs text-gray-500 mb-1">プロジェクト履歴</h3>`;
-            
-            // [修正] 履歴を最終更新日時でソート
             projectHistory.sort((a, b) => b.lastModified - a.lastModified);
             
             projectHistory.forEach(project => {
                 const isCurrent = project.projectId === state.generalSettings.projectId;
                 const item = document.createElement('div');
-                // [修正] アクティブなプロジェクトに active-project クラスを適用
-                item.className = `history-project-item relative flex justify-between items-center ${isCurrent ? 'active-project' : ''}`; 
+                item.className = 'history-project-item relative flex justify-between items-center'; 
                 
                 item.onclick = (e) => {
                     if (e.target.closest('.project-menu-btn')) return;
-                    // [修正] ロード前にアクティブクラスを一時的に削除し、ロード後に再適用されるのを待つ
-                    if (!isCurrent) {
-                        document.querySelectorAll('.history-project-item').forEach(el => el.classList.remove('active-project'));
-                        item.classList.add('active-project');
-                        // [修正] loadProjectでDOMが再生成されるため、ここではstateの変更のみで良い
-                        loadProject(project.projectId);
-                    }
+                    loadProject(project.projectId);
                 };
                 
                 item.innerHTML = `
@@ -2376,6 +2238,9 @@
                 `;
                 list.appendChild(item);
             });
+
+            // [修正] ホバーと固定時の表示制御はCSSとtoggleMenu()に委ねるため、ここでのdisplay制御は削除
+            // list.style.display = isSidebarExpanded ? 'block' : 'none';
         }
         
         function toggleProjectMenu(event, projectId) {
@@ -2645,7 +2510,7 @@
                  inputEl.value = scene[type].setting;
                  selectEl.value = '';
             } else {
-                 selectEl.value = scene[type].setting === 'Inherit' || scene[type].setting === '' ? '' : scene[type].setting;
+                 selectEl.value = scene[type].setting === 'Inherit' ? '' : scene[type].setting;
                  inputEl.value = '';
             }
         }
@@ -3687,7 +3552,7 @@
                 const resolveSetting = (type, defaultValue) => {
                     if (scene[type].inherit || scene[type].setting === 'Inherit' || scene[type].setting === '') {
                         if (previousScene) {
-                            return previousScene[type].setting === 'Inherit' || previousScene[type].setting === '' ? defaultValue : previousScene[type].setting;
+                            return previousScene[type].setting;
                         } else {
                             return defaultValue; 
                         }
@@ -3775,7 +3640,7 @@
         }
         
         // =========================================================================
-        // [復元と移動] テキスト折り返し関数をここに定義します (変更なし)
+        // [復元と移動] テキスト折り返し関数をここに定義します
         // =========================================================================
         function calculateTextLines(ctx, text, maxWidth) {
             // [修正] 日本語の文字単位分割と欧文の単語分割に対応
@@ -3916,13 +3781,13 @@
             return lineY; 
         }
 
-        // [追加] 高さを計算するだけのヘルパー関数 (描画ロジックの再利用) (変更なし)
+        // [追加] 高さを計算するだけのヘルパー関数 (描画ロジックの再利用)
         function requiredHeight(characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT) {
-             const BASE_SCALE_FACTOR = 1920 / 1200; // [修正] 基準サイズを拡大
+             const BASE_SCALE_FACTOR = 1920 / 800;
              const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
-             const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT * 1.2;
-             const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 1.0;
-             const ITEM_GAP = 20 * BASE_SCALE_FACTOR; 
+             const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
+             const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8;
+             const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
              
              const MAX_TEXT_WIDTH = totalW - TEXT_OFFSET - (PADDING_X * 2);
             
@@ -3934,15 +3799,15 @@
              
              for (const char of characters) {
                  // ctxRef.font の設定を再現
-                 dummyCtx.font = `bold ${24 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
+                 dummyCtx.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
                  const nameLines = calculateTextLines(dummyCtx, char.name, MAX_TEXT_WIDTH);
                  const nameHeight = nameLines * LINE_HEIGHT_NAME;
 
-                 dummyCtx.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
+                 dummyCtx.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                  const descLines = calculateTextLines(dummyCtx, char.description, MAX_TEXT_WIDTH);
                  const descHeight = descLines * LINE_HEIGHT_DESC;
 
-                 const requiredTextHeight = nameHeight + 10 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
+                 const requiredTextHeight = nameHeight + 5 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
                  
                  const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
                  
@@ -3954,10 +3819,10 @@
 
         // [修正] 縦長レイアウトのキャラセクション計算関数にスケールパラメータを追加
         async function calculateTwoColumnCharacterSectionHeight(ctxRef, characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT, MAX_VIRTUAL_HEIGHT) {
-            const BASE_SCALE_FACTOR = 1920 / 1200; // [修正] 基準サイズを拡大 (800->1200)
+            const BASE_SCALE_FACTOR = 1920 / 800;
             const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
             const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8; 
-            const ITEM_GAP = 20 * BASE_SCALE_FACTOR; // [修正] 行間を少し広げる
+            const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
             
             const colWidth = (totalW - PADDING_X) / 2;
             const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
@@ -3971,16 +3836,15 @@
 
             for (const char of characters) {
                 // ctxRef.font の設定を再現
-                ctxRef.font = `bold ${24 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 const nameLines = calculateTextLines(ctxRef, char.name, MAX_TEXT_WIDTH);
                 const nameHeight = nameLines * LINE_HEIGHT_NAME;
 
-                ctxRef.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 const descLines = calculateTextLines(ctxRef, char.description, MAX_TEXT_WIDTH);
                 const descHeight = descLines * LINE_HEIGHT_DESC;
                 
-                // [修正] 名前と説明文の間のスペースを調整 (5 -> 10)
-                const requiredTextHeight = nameHeight + 10 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
+                const requiredTextHeight = nameHeight + 5 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
                 const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
 
                 let targetY;
@@ -4011,11 +3875,11 @@
 
         // [修正] 横長レイアウトのキャラセクション計算関数にスケールパラメータを追加
         async function calculateCharacterSectionHeight(ctxRef, characters, totalW, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT) {
-            const BASE_SCALE_FACTOR = 1920 / 1200; // [修正] 基準サイズを拡大
+            const BASE_SCALE_FACTOR = 1920 / 800;
             const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
             const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
             const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8;
-            const ITEM_GAP = 20 * BASE_SCALE_FACTOR; // [修正] 行間を広げる
+            const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
             
             const MAX_TEXT_WIDTH = totalW - TEXT_OFFSET - (PADDING_X * 2);
             
@@ -4023,16 +3887,15 @@
 
             for (const char of characters) {
                 // ctxRef.font の設定を再現
-                ctxRef.font = `bold ${24 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
                 const nameLines = calculateTextLines(ctxRef, char.name, MAX_TEXT_WIDTH);
                 const nameHeight = nameLines * LINE_HEIGHT_NAME;
 
-                ctxRef.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 const descLines = calculateTextLines(ctxRef, char.description, MAX_TEXT_WIDTH);
                 const descHeight = descLines * LINE_HEIGHT_DESC;
 
-                // [修正] 名前と説明文の間のスペースを調整 (5 -> 10)
-                const requiredTextHeight = nameHeight + 10 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
+                const requiredTextHeight = nameHeight + 5 * BASE_SCALE_FACTOR + descHeight + LINE_HEIGHT_DESC;
                 
                 const blockHeight = Math.max(CHAR_IMG_SIZE, requiredTextHeight);
                 
@@ -4042,7 +3905,7 @@
             return { requiredHeight: totalHeight }; 
         }
         
-        // [復元] drawImagesInSketch: 画像のクロッピングを適用
+        // [復元] drawImagesInSketch: 描画フレームサイズと論理サイズの両方を引数として受け取る
         async function drawImagesInSketch(ctxRef, images, frameX, frameY, frameW, frameH) {
              for (const imgData of images) {
                  const img = new Image();
@@ -4051,7 +3914,7 @@
 
                  await new Promise(resolve => {
                      img.onload = () => {
-                         // 1. フレーム内での描画範囲 (パーセンテージをピクセルに変換)
+                         // [修正] パーセンテージをフレームのピクセル値に変換
                          const drawX_percent = imgData.x; // 0-100%
                          const drawY_percent = imgData.y; // 0-100%
                          const drawW_percent = imgData.width; // 0-100%
@@ -4063,35 +3926,15 @@
                          const drawW = frameW * drawW_percent / 100;
                          const drawH = frameH * drawH_percent / 100;
                          
-                         // 2. クロップの適用 (枠内で描画)
+                         const rotation = imgData.rotation * Math.PI / 180;
+
+                         const centerX = drawX + drawW / 2;
+                         const centerY = drawY + drawH / 2;
+
                          ctxRef.save();
-                         ctxRef.beginPath();
-                         // [修正] 描画領域をフレームにクリッピングする
-                         ctxRef.rect(frameX, frameY, frameW, frameH); 
-                         ctxRef.clip();
-
-                         // 3. 画像のアスペクト比を維持して、指定された領域に 'contain' で描画
-                         const imgAspect = img.width / img.height;
-                         const drawAspect = drawW / drawH;
-                         
-                         let finalW, finalH, finalX, finalY;
-                         
-                         if (imgAspect > drawAspect) {
-                            // 画像が横長すぎる場合 (幅に合わせる)
-                            finalW = drawW;
-                            finalH = drawW / imgAspect;
-                            finalX = drawX;
-                            finalY = drawY + (drawH - finalH) / 2;
-                         } else {
-                            // 画像が縦長すぎるか同じ場合 (高さに合わせる)
-                            finalH = drawH;
-                            finalW = drawH * imgAspect;
-                            finalX = drawX + (drawW - finalW) / 2;
-                            finalY = drawY;
-                         }
-
-                         // 4. 描画
-                         ctxRef.drawImage(img, finalX, finalY, finalW, finalH);
+                         ctxRef.translate(centerX, centerY);
+                         ctxRef.rotate(rotation);
+                         ctxRef.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
                          ctxRef.restore();
                          
                          resolve();
@@ -4164,7 +4007,7 @@
                 
                 ctxRef.drawImage(tempCanvas, targetX, targetY, targetW, targetH);
 
-             } else {
+            } else {
                  await new Promise(resolve => {
                      img.onload = () => {
                          ctxRef.drawImage(img, targetX, targetY, targetW, targetH);
@@ -4172,7 +4015,7 @@
                      };
                      img.onerror = resolve; 
                  });
-             }
+            }
         }
         
         // [復元] drawCharactersInSketch: 視認性向上のための縁取りを追加
@@ -4191,15 +4034,13 @@
 
                  // 視認性向上のため、縁取りを適用
                  if (improvedVisibility) {
-                     // [修正] フォントサイズを大きくする
-                     ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif'; 
+                     ctxRef.font = 'bold 16px "Noto Sans JP", sans-serif';
                      ctxRef.strokeStyle = '#111'; // 背景色
                      ctxRef.lineWidth = 4;
                      ctxRef.strokeText(charData.name, drawX, drawY);
                  }
                  
-                 // [修正] フォントサイズを大きくする
-                 ctxRef.font = 'bold 24px "Noto Sans JP", sans-serif'; 
+                 ctxRef.font = 'bold 16px "Noto Sans JP", sans-serif';
                  ctxRef.fillStyle = '#238636'; // フレームの緑色
                  ctxRef.textAlign = 'left';
                  ctxRef.fillText(charData.name, drawX, drawY);
@@ -4249,18 +4090,21 @@
             
             const ASPECT = state.generalSettings.aspectRatio;
             
-            // [修正] スケーリングを考慮した定数 (1920px 基準 / 基準高さを1200に設定して文字を大きくする)
-            const BASE_SCALE_REFERENCE = 1200; 
-            const BASE_SCALE_FACTOR = 1920 / BASE_SCALE_REFERENCE; // 1.6
+            // [修正] スケーリングを考慮した定数 (1920px 基準)
+            const BASE_SIZE_VERTICAL = 1920; 
+            const BASE_SIZE_HORIZONTAL = 1920; 
+            
+            // 基準のサイズ (縦長は高さ1920、横長は幅1920)
+            const SCALE_FACTOR = 1920 / 800; // 旧基準高さ800に対するスケーリング
 
-            const PADDING = 20 * BASE_SCALE_FACTOR; 
-            const TEXT_LINE_HEIGHT = 24 * BASE_SCALE_FACTOR; // [修正] 行高を大きく (20 -> 24)
-            const PADDING_X = 20 * BASE_SCALE_FACTOR; 
-            const CHAR_IMG_SIZE = 80 * BASE_SCALE_FACTOR; // [修正] 画像サイズを大きく (60 -> 80)
-            const FRAME_LEFT_MARGIN = 100 * BASE_SCALE_FACTOR; 
-            const SCENE_W_UNIT = 200 * BASE_SCALE_FACTOR; // [修正] シーン幅を少し大きく (180 -> 200)
-            const SCENE_HEIGHT_PER_ROW = 150 * BASE_SCALE_FACTOR; // [修正] シーン行高を大きく (120 -> 150)
-            const HEADER_HEIGHT = 40 * BASE_SCALE_FACTOR; // [修正] ヘッダー高を大きく (30 -> 40)
+            const PADDING = 20 * SCALE_FACTOR; 
+            const TEXT_LINE_HEIGHT = 20 * SCALE_FACTOR; // 行間
+            const PADDING_X = 20 * SCALE_FACTOR; 
+            const CHAR_IMG_SIZE = 60 * SCALE_FACTOR;
+            const FRAME_LEFT_MARGIN = 100 * SCALE_FACTOR; 
+            const SCENE_W_UNIT = 180 * SCALE_FACTOR; 
+            const SCENE_HEIGHT_PER_ROW = 120 * SCALE_FACTOR; 
+            const HEADER_HEIGHT = 30 * SCALE_FACTOR; 
             
             
             const projectUsedCharacters = allCharacters.filter(c => state.generalSettings.projectCharacters.includes(c.id));
@@ -4271,18 +4115,18 @@
             let CENTER_FRAME_W, CENTER_FRAME_H;
             let MAX_SIDE_SIZE = 0; 
             
-            // --- 縦長レイアウト (9:16) ---
             if (ASPECT === '9:16_vertical') {
-                CENTER_FRAME_H = 1920; 
-                CENTER_FRAME_W = CENTER_FRAME_H * 9 / 16; 
+                // 縦長 (9:16) - 基準は高さ 1920px
+                CENTER_FRAME_H = BASE_SIZE_VERTICAL; // 1920
+                CENTER_FRAME_W = CENTER_FRAME_H * 9 / 16; // 1080
                 
                 const SCENE_BLOCK_TOTAL_W = SCENE_W_UNIT + PADDING_X * 2;
                 const LEFT_SIDE_W_REQUIRED = SCENE_BLOCK_TOTAL_W * state.scenes.length; 
                 
-                ctxRef.font = `bold ${24 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
-                const AVG_CHAR_WIDTH = 15 * BASE_SCALE_FACTOR; 
+                ctxRef.font = `bold ${18 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`; 
+                const AVG_CHAR_WIDTH = 12 * SCALE_FACTOR; 
                 const TARGET_TEXT_WIDTH = AVG_CHAR_WIDTH * 20; 
-                const CHAR_COL_MIN_W = CHAR_IMG_SIZE + 20 * BASE_SCALE_FACTOR + TARGET_TEXT_WIDTH + PADDING_X; 
+                const CHAR_COL_MIN_W = CHAR_IMG_SIZE + 20 * SCALE_FACTOR + TARGET_TEXT_WIDTH + PADDING_X; 
                 const RIGHT_SIDE_W_REQUIRED = CHAR_COL_MIN_W * 2 + PADDING_X; 
 
                 MAX_SIDE_SIZE = Math.max(LEFT_SIDE_W_REQUIRED, RIGHT_SIDE_W_REQUIRED); 
@@ -4290,8 +4134,9 @@
                 const LEFT_SIDE_W = MAX_SIDE_SIZE;
                 const RIGHT_SIDE_W = MAX_SIDE_SIZE;
                 
+                // [修正] スケールパラメータを渡す
                 const { requiredHeight: charRequiredH } = await calculateTwoColumnCharacterSectionHeight(
-                    ctxRef, projectUsedCharacters, RIGHT_SIDE_W, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT, CENTER_FRAME_H
+                    ctxRef, projectUsedCharacters, RIGHT_SIDE_W, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT, BASE_SIZE_VERTICAL
                 );
 
                 H = Math.max(CENTER_FRAME_H, charRequiredH);
@@ -4314,21 +4159,21 @@
                     ctxRef.fillStyle = '#212121';
                     ctxRef.fillRect(currentX, 0, sceneW, H); 
                     ctxRef.strokeStyle = '#333';
-                    ctxRef.lineWidth = 1 * BASE_SCALE_FACTOR;
+                    ctxRef.lineWidth = 1 * SCALE_FACTOR;
                     ctxRef.strokeRect(currentX, 0, sceneW, H);
                     
                     const FRAME_W = SCENE_W_UNIT;
                     const FRAME_H = FRAME_W * (16 / 9); 
                     const FRAME_X = currentX + PADDING_X; 
                     
-                    const HEADER_SPACE = 40 * BASE_SCALE_FACTOR; 
+                    const HEADER_SPACE = 40 * SCALE_FACTOR; 
                     const FRAME_Y = HEADER_SPACE; 
                     
                     ctxRef.strokeStyle = '#238636';
-                    ctxRef.lineWidth = 4 * BASE_SCALE_FACTOR;
+                    ctxRef.lineWidth = 4 * SCALE_FACTOR;
                     ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
                     ctxRef.fillStyle = '#111';
-                    ctxRef.fillRect(FRAME_X + 2 * BASE_SCALE_FACTOR, FRAME_Y + 2 * BASE_SCALE_FACTOR, FRAME_W - 4 * BASE_SCALE_FACTOR, FRAME_H - 4 * BASE_SCALE_FACTOR);
+                    ctxRef.fillRect(FRAME_X + 2 * SCALE_FACTOR, FRAME_Y + 2 * SCALE_FACTOR, FRAME_W - 4 * SCALE_FACTOR, FRAME_H - 4 * SCALE_FACTOR);
                     
                     if (scene.sketchData.images && scene.sketchData.images.length > 0) {
                          // [修正] drawImagesInSketch の引数を修正
@@ -4336,32 +4181,37 @@
                     }
 
                     if (scene.sketchData.handDrawn) {
+                         // [修正] 手書き描画の視認性を向上させる
                          await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W, FRAME_H, true);
                     }
 
-                    ctxRef.font = `bold ${24 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                    ctxRef.font = `bold ${20 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                     ctxRef.fillStyle = '#f0f0f0'; 
                     ctxRef.textAlign = 'left';
-                    ctxRef.fillText(scene.timeStart, currentX + PADDING_X, PADDING + 5 * BASE_SCALE_FACTOR); 
+                    ctxRef.fillText(scene.timeStart, currentX + PADDING_X, PADDING); 
                     
-                    ctxRef.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                    ctxRef.font = `${12 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                     ctxRef.fillStyle = '#f0f0f0';
                     
-                    const TEXT_START_Y = FRAME_Y + FRAME_H + 20 * BASE_SCALE_FACTOR; 
+                    const TEXT_START_Y = FRAME_Y + FRAME_H + 20 * SCALE_FACTOR; 
+                    // [修正] テキスト領域の高さをシーンの底まで確保
                     const TEXT_MAX_HEIGHT = H - TEXT_START_Y - PADDING; 
                     
                     const TEXT_AREA_X = currentX + PADDING_X;
                     const TEXT_AREA_Y = TEXT_START_Y;
                     const TEXT_AREA_W = sceneW - PADDING_X * 2;
                     
+                    // [追加] デバッグ用の枠描画
                     if (DEBUG_BOUNDS) {
                         ctxRef.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-                        ctxRef.lineWidth = 1 * BASE_SCALE_FACTOR;
+                        ctxRef.lineWidth = 1 * SCALE_FACTOR;
                         ctxRef.strokeRect(TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_MAX_HEIGHT);
                     }
                     
+                    // [修正] wrapText の改行処理を有効化
                     wrapText(ctxRef, scene.promptDescription, TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_LINE_HEIGHT * 0.8, TEXT_AREA_Y + TEXT_MAX_HEIGHT);
 
+                    // [修正] キャラクター名の視認性を向上させる
                     await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W, FRAME_H, true);
                     currentX += sceneW;
                 }
@@ -4381,36 +4231,44 @@
                 ctxRef.fillStyle = '#2b2b2b';
                 ctxRef.fillRect(CHAR_X, 0, CHAR_W, H); 
                 
-                ctxRef.font = `bold ${28 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `bold ${24 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 ctxRef.fillStyle = '#238636';
                 ctxRef.textAlign = 'left';
-                ctxRef.fillText('キャラ設定', CHAR_X + PADDING_X, PADDING + 10 * BASE_SCALE_FACTOR);
+                ctxRef.fillText('キャラ設定', CHAR_X + PADDING_X, PADDING + 10 * SCALE_FACTOR);
                 
-                const CHAR_SECTION_Y_START = PADDING + HEADER_HEIGHT + 10 * BASE_SCALE_FACTOR;
-                await drawCharacterSection(ctxRef, projectUsedCharacters, CHAR_X, CHAR_SECTION_Y_START, CHAR_W, H - CHAR_SECTION_Y_START, PADDING, true, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT); 
+                const CHAR_SECTION_Y_START = PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR;
+                // [修正] スケールパラメータを渡す
+                await drawCharacterSection(ctxRef, projectUsedCharacters, CHAR_X, CHAR_SECTION_Y_START, CHAR_W, H - CHAR_SECTION_Y_START, PADDING, true, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT * 0.8); 
                 
-            } else { // --- 横長レイアウト (16:9) ---
+            } else { // 16:9_horizontal
                 
-                CENTER_FRAME_W = 1920; 
-                CENTER_FRAME_H = CENTER_FRAME_W * 9 / 16; 
+                // 横長 (16:9) - 基準は幅 1920px
+                CENTER_FRAME_W = BASE_SIZE_HORIZONTAL; // 1920
+                CENTER_FRAME_H = CENTER_FRAME_W * 9 / 16; // 1080
                 W = CENTER_FRAME_W; 
                 
+                // 2. キャラクターセクションとシーンセクションの必要高さを計算
+                // [修正] スケールパラメータを渡す (計算関数はasyncではないため、直接呼び出す)
                 const { requiredHeight: charRequiredH_dummy } = await calculateCharacterSectionHeight(
                     ctxRef, projectUsedCharacters, W, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT
                 );
                 
+                // 3. シーンセクションの必要高さを計算
                 const SCENE_CUT_MIN_H = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
                 
-                let TARGET_BLOCK_HEIGHT = CENTER_FRAME_H / 2; 
+                // 4. メイン画像の高さを基準に、上部と下部の高さを決定
+                let TARGET_BLOCK_HEIGHT = CENTER_FRAME_H / 2; // 1080 / 2 = 540px
                 
                 let SCENE_BLOCK_H_TOP = TARGET_BLOCK_HEIGHT; 
                 let CHAR_SECTION_H = TARGET_BLOCK_HEIGHT; 
                 
+                // [修正] 最小カット割り高さを確保し、上部/下部の高さを強制的に一致させる
                 if (SCENE_CUT_MIN_H > TARGET_BLOCK_HEIGHT) {
                     SCENE_BLOCK_H_TOP = SCENE_CUT_MIN_H;
                     CHAR_SECTION_H = SCENE_CUT_MIN_H; 
                 }
 
+                // 描画全体の高さは、上部 + 中央 + 下部
                 H = SCENE_BLOCK_H_TOP + CENTER_FRAME_H + CHAR_SECTION_H;
                 
                 canvasRef.setAttribute('width', W);
@@ -4425,12 +4283,13 @@
                 ctxRef.fillStyle = '#212121';
                 ctxRef.fillRect(0, SCENE_BLOCK_Y, W, SCENE_BLOCK_H_TOP);
                 
-                ctxRef.font = `bold ${28 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `bold ${24 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 ctxRef.fillStyle = '#238636';
                 ctxRef.textAlign = 'left';
-                ctxRef.fillText('カット割り（横長）', PADDING_X, SCENE_BLOCK_Y + PADDING + 10 * BASE_SCALE_FACTOR);
+                ctxRef.fillText('カット割り（横長）', PADDING_X, SCENE_BLOCK_Y + PADDING + 10 * SCALE_FACTOR);
 
                 const SCENE_CUT_ACTUAL_H = state.scenes.length * SCENE_HEIGHT_PER_ROW + HEADER_HEIGHT + PADDING * 2;
+                // [修正] SCENE_BLOCK_H_TOPの高さの中央にカット割りセクションを配置
                 const SCENE_Y_OFFSET = (SCENE_BLOCK_H_TOP - SCENE_CUT_ACTUAL_H) / 2;
                 
                 state.scenes.forEach(async (scene, index) => {
@@ -4439,53 +4298,59 @@
                     
                     const FRAME_X = PADDING_X + FRAME_LEFT_MARGIN;
                     
-                    const FRAME_PADDING = 10 * BASE_SCALE_FACTOR;
+                    const FRAME_PADDING = 10 * SCALE_FACTOR;
                     const FRAME_H = SCENE_HEIGHT_PER_ROW - (FRAME_PADDING * 2); 
                     const FRAME_W_TARGET = FRAME_H * (16 / 9); 
                     
                     const FRAME_Y = blockY + FRAME_PADDING;
 
-                    const PROMPT_X = FRAME_X + FRAME_W_TARGET + 15 * BASE_SCALE_FACTOR;
+                    const PROMPT_X = FRAME_X + FRAME_W_TARGET + 15 * SCALE_FACTOR;
                     const PROMPT_W = W - PROMPT_X - PADDING_X; 
                     
-                    ctxRef.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                    ctxRef.font = `bold ${14 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                     ctxRef.fillStyle = '#c9d1d9';
                     ctxRef.textAlign = 'right';
-                    ctxRef.fillText(scene.timeStart, FRAME_LEFT_MARGIN - 5 * BASE_SCALE_FACTOR, FRAME_Y + FRAME_H / 2 + 5 * BASE_SCALE_FACTOR);
+                    ctxRef.fillText(scene.timeStart, FRAME_LEFT_MARGIN - 5 * SCALE_FACTOR, FRAME_Y + FRAME_H / 2 + 5 * SCALE_FACTOR);
                     
                     ctxRef.strokeStyle = '#238636';
-                    ctxRef.lineWidth = 4 * BASE_SCALE_FACTOR;
+                    ctxRef.lineWidth = 4 * SCALE_FACTOR;
                     ctxRef.strokeRect(FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
                     ctxRef.fillStyle = '#111';
-                    ctxRef.fillRect(FRAME_X + 2 * BASE_SCALE_FACTOR, FRAME_Y + 2 * BASE_SCALE_FACTOR, FRAME_W_TARGET - 4 * BASE_SCALE_FACTOR, FRAME_H - 4 * BASE_SCALE_FACTOR);
+                    ctxRef.fillRect(FRAME_X + 2 * SCALE_FACTOR, FRAME_Y + 2 * SCALE_FACTOR, FRAME_W_TARGET - 4 * SCALE_FACTOR, FRAME_H - 4 * SCALE_FACTOR);
                     
                     if (scene.sketchData.images && scene.sketchData.images.length > 0) {
+                         // [修正] drawImagesInSketch の引数を修正
                          await drawImagesInSketch(ctxRef, scene.sketchData.images, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H);
                     }
                     
                     if (scene.sketchData.handDrawn) {
+                         // [修正] 手書き描画の視認性を向上させる
                          await drawHandDrawnSketch(ctxRef, scene.sketchData.handDrawn, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H, true);
                     }
 
                     ctxRef.fillStyle = '#f0f0f0';
-                    ctxRef.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                    ctxRef.font = `${12 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                     ctxRef.textAlign = 'left';
                     
-                    const PROMPT_START_Y = FRAME_Y + 15 * BASE_SCALE_FACTOR;
-                    const TEXT_MAX_HEIGHT = FRAME_H - 25 * BASE_SCALE_FACTOR; 
+                    const PROMPT_START_Y = FRAME_Y + 15 * SCALE_FACTOR;
+                    const TEXT_MAX_HEIGHT = FRAME_H - 25 * SCALE_FACTOR; // 描画可能な高さを確保
 
                     const TEXT_AREA_X = PROMPT_X;
                     const TEXT_AREA_Y = PROMPT_START_Y;
                     const TEXT_AREA_W = PROMPT_W;
                     
+                    // [追加] デバッグ用の枠描画
                     if (DEBUG_BOUNDS) {
                         ctxRef.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-                        ctxRef.lineWidth = 1 * BASE_SCALE_FACTOR;
-                        ctxRef.strokeRect(TEXT_AREA_X, TEXT_AREA_Y - 15 * BASE_SCALE_FACTOR, TEXT_AREA_W, TEXT_MAX_HEIGHT + 10 * BASE_SCALE_FACTOR);
+                        ctxRef.lineWidth = 1 * SCALE_FACTOR;
+                        // [修正] Y座標を調整して描画エリア全体を囲む
+                        ctxRef.strokeRect(TEXT_AREA_X, TEXT_AREA_Y - 15 * SCALE_FACTOR, TEXT_AREA_W, TEXT_MAX_HEIGHT + 10 * SCALE_FACTOR);
                     }
 
+                    // [修正] wrapText の改行処理を有効化
                     wrapText(ctxRef, scene.promptDescription, TEXT_AREA_X, TEXT_AREA_Y, TEXT_AREA_W, TEXT_LINE_HEIGHT * 0.8, TEXT_MAX_HEIGHT + TEXT_AREA_Y);
 
+                    // [修正] キャラクター名の視認性を向上させる
                     await drawCharactersInSketch(ctxRef, scene.sketchData.characters, FRAME_X, FRAME_Y, FRAME_W_TARGET, FRAME_H, true);
                 });
                 
@@ -4507,41 +4372,43 @@
                 ctxRef.fillStyle = '#2b2b2b';
                 ctxRef.fillRect(0, CHAR_BLOCK_Y, CHAR_W, CHAR_SECTION_H); 
                 
-                ctxRef.font = `bold ${28 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `bold ${24 * SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 ctxRef.fillStyle = '#238636';
                 ctxRef.textAlign = 'left';
-                ctxRef.fillText('キャラ設定', PADDING_X, CHAR_BLOCK_Y + PADDING + 10 * BASE_SCALE_FACTOR);
+                ctxRef.fillText('キャラ設定', PADDING_X, CHAR_BLOCK_Y + PADDING + 10 * SCALE_FACTOR);
                 
-                const CHAR_SECTION_Y_START = CHAR_BLOCK_Y + PADDING + HEADER_HEIGHT + 10 * BASE_SCALE_FACTOR;
+                const CHAR_SECTION_Y_START = CHAR_BLOCK_Y + PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR;
                 
+                // [修正] コンテンツの中央揃えのためのオフセット計算
                 const CHAR_CONTENT_H = requiredHeight(projectUsedCharacters, W, PADDING, HEADER_HEIGHT, PADDING_X, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT);
-                const CHAR_BLOCK_INNER_H = CHAR_SECTION_H - (PADDING + HEADER_HEIGHT + 10 * BASE_SCALE_FACTOR);
+                const CHAR_BLOCK_INNER_H = CHAR_SECTION_H - (PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR);
                 const CHAR_OFFSET_Y = (CHAR_BLOCK_INNER_H - CHAR_CONTENT_H) / 2;
 
+                // [修正] Y座標にオフセットを追加して、ブロックの垂直方向中央に配置
                 await drawCharacterSection(
                     ctxRef, 
                     projectUsedCharacters, 
                     0, 
-                    CHAR_SECTION_Y_START + Math.max(0, CHAR_OFFSET_Y), 
+                    CHAR_SECTION_Y_START + Math.max(0, CHAR_OFFSET_Y), // 0以下にはしない
                     CHAR_W, 
-                    CHAR_SECTION_H - (PADDING + HEADER_HEIGHT + 10 * BASE_SCALE_FACTOR), 
+                    CHAR_SECTION_H - (PADDING + HEADER_HEIGHT + 10 * SCALE_FACTOR), 
                     PADDING, 
                     false,
                     CHAR_IMG_SIZE,
-                    TEXT_LINE_HEIGHT
+                    TEXT_LINE_HEIGHT * 0.8
                 );
             }
         }
 
-        // [修正] drawCharacterSection: スケールパラメータと行間調整
+        // [修正] drawCharacterSection: スケールパラメータを追加
         async function drawCharacterSection(ctxRef, characters, startX, startY, totalW, totalH, PADDING, isTwoColumn = false, CHAR_IMG_SIZE, TEXT_LINE_HEIGHT) {
             
-            const BASE_SCALE_FACTOR = 1920 / 1200; // [修正] 基準サイズを拡大
+            const BASE_SCALE_FACTOR = 1920 / 800;
             const TEXT_OFFSET = 80 * BASE_SCALE_FACTOR;
             const PADDING_X = 20 * BASE_SCALE_FACTOR;
-            const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT * 1.2; // [修正] 行間を広げる
-            const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 1.0; // [修正] 行間を調整 (0.8 -> 1.0)
-            const ITEM_GAP = 20 * BASE_SCALE_FACTOR; // [修正] アイテム間の間隔を広げる
+            const LINE_HEIGHT_NAME = TEXT_LINE_HEIGHT;
+            const LINE_HEIGHT_DESC = TEXT_LINE_HEIGHT * 0.8;
+            const ITEM_GAP = 15 * BASE_SCALE_FACTOR; 
             
             const MAX_DRAW_HEIGHT = startY + totalH; 
             
@@ -4551,19 +4418,18 @@
             
             if (isTwoColumn) {
                 colWidth = (totalW - PADDING_X) / 2;
-                colStartY = startY; 
+                // 縦長の場合の初期位置調整
+                 colStartY = startY; // 垂直中央揃え後の開始Y
             }
 
             let charY = startY; 
             
             for (const char of characters) {
                 
-                let isWrapped = false;
                 if (isTwoColumn && charY + CHAR_IMG_SIZE + LINE_HEIGHT_NAME > MAX_DRAW_HEIGHT && currentX === startX) {
                     currentX = startX + colWidth + PADDING_X; 
                     charY = colStartY; 
-                    isWrapped = true;
-                } else if (isTwoColumn && currentX !== startX && charY + CHAR_IMG_SIZE > MAX_DRAW_HEIGHT && !isWrapped) {
+                } else if (isTwoColumn && currentX !== startX && charY + CHAR_IMG_SIZE > MAX_DRAW_HEIGHT) {
                     break;
                 }
                 
@@ -4582,24 +4448,28 @@
 
                     await new Promise(resolve => {
                         img.onload = () => {
-                            const frameSize = CHAR_IMG_SIZE; 
+                            // --- [修正開始] 縦横比を維持して枠に収める (contain) ---
+                            const frameSize = CHAR_IMG_SIZE; // 枠の幅と高さは等しい
                             const scale = Math.min(frameSize / img.width, frameSize / img.height);
                             
                             const drawW = img.width * scale;
                             const drawH = img.height * scale;
                             
+                            // 枠内での中央揃え
                             const offsetX = (frameSize - drawW) / 2;
                             const offsetY = (frameSize - drawH) / 2;
 
                             ctxRef.fillStyle = '#30363d';
-                            ctxRef.fillRect(imgX, currentBlockY, frameSize, frameSize); 
+                            ctxRef.fillRect(imgX, currentBlockY, frameSize, frameSize); // 背景を塗りつぶす (黒枠)
                             ctxRef.drawImage(img, imgX + offsetX, currentBlockY + offsetY, drawW, drawH);
+                            // --- [修正終了] ---
                             resolve();
                         };
                         img.onerror = () => {
+                            // エラー時/ロード失敗時は以前のプレースホルダー表示
                             ctxRef.fillStyle = '#30363d';
                             ctxRef.fillRect(imgX, currentBlockY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
-                            ctxRef.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                            ctxRef.font = `${12 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                             ctxRef.fillStyle = '#c9d1d9';
                             ctxRef.textAlign = 'center';
                             ctxRef.fillText(char.name.charAt(0), imgX + CHAR_IMG_SIZE / 2, currentBlockY + CHAR_IMG_SIZE / 2 + 4 * BASE_SCALE_FACTOR);
@@ -4607,35 +4477,36 @@
                         };
                     });
                 } else {
+                    // 画像未設定時は以前のプレースホルダー表示
                     ctxRef.fillStyle = '#30363d';
                     ctxRef.fillRect(imgX, currentBlockY, CHAR_IMG_SIZE, CHAR_IMG_SIZE);
-                    ctxRef.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                    ctxRef.font = `${12 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                     ctxRef.fillStyle = '#c9d1d9';
                     ctxRef.textAlign = 'center';
                     ctxRef.fillText(char.name.charAt(0), imgX + CHAR_IMG_SIZE / 2, currentBlockY + CHAR_IMG_SIZE / 2 + 4 * BASE_SCALE_FACTOR);
                 }
 
-                ctxRef.font = `bold ${24 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `bold ${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 ctxRef.fillStyle = '#fff';
                 ctxRef.textAlign = 'left';
                 
                 const NAME_MAX_WIDTH = colWidth - TEXT_OFFSET - PADDING_X;
-                let nameDrawY = currentBlockY + 20 * BASE_SCALE_FACTOR; // [修正] 開始Y座標を調整
+                let nameDrawY = currentBlockY + 15 * BASE_SCALE_FACTOR; 
                 
                 nameDrawY = wrapText(ctxRef, char.name, textX, nameDrawY, NAME_MAX_WIDTH, LINE_HEIGHT_NAME, MAX_DRAW_HEIGHT - PADDING); 
 
-                ctxRef.font = `${18 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`; // [修正] フォントサイズ調整
+                ctxRef.font = `${14 * BASE_SCALE_FACTOR}px "Noto Sans JP", sans-serif`;
                 ctxRef.fillStyle = '#c9d1d9';
                 
                 const descriptionText = char.description;
                 const DESC_MAX_WIDTH = NAME_MAX_WIDTH;
                 
-                let descDrawY = nameDrawY + 10 * BASE_SCALE_FACTOR; // [修正] 名前の行間＋10pxスペース
+                let descDrawY = nameDrawY + 5 * BASE_SCALE_FACTOR; // 名前の行間＋5pxスペース
                 
                 descDrawY = wrapText(ctxRef, descriptionText, textX, descDrawY, DESC_MAX_WIDTH, LINE_HEIGHT_DESC, MAX_DRAW_HEIGHT - PADDING);
 
                 const nextY_by_image = currentBlockY + CHAR_IMG_SIZE + ITEM_GAP;
-                const nextY_by_text = descDrawY + ITEM_GAP; 
+                const nextY_by_text = descDrawY + ITEM_GAP; // 最終行の底からのオフセット 
 
                 charY = Math.max(nextY_by_image, nextY_by_text);
             }
